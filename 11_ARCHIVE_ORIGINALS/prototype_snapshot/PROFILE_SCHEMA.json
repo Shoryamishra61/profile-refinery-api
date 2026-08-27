@@ -1,0 +1,866 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NormalizedLinkedInProfile",
+  "description": "Canonical schema for a browser-less, reverse-engineered LinkedIn profile API with strict status ontology and provenance.",
+  "type": "object",
+  "properties": {
+    "identity": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "vanity_slug": {
+              "type": "string"
+            },
+            "member_urn": {
+              "type": "string",
+              "pattern": "^urn:li:fsd_profile:[A-Za-z0-9_-]+$"
+            },
+            "profile_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "vanity_slug",
+            "member_urn"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "headline": {
+      "$ref": "#/definitions/StringField"
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "country_code": {
+              "type": "string"
+            },
+            "postal_code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "about": {
+      "$ref": "#/definitions/StringField"
+    },
+    "profile_image": {
+      "$ref": "#/definitions/ImageField"
+    },
+    "background_image": {
+      "$ref": "#/definitions/ImageField"
+    },
+    "experience": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExperienceEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "education": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EducationEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "skills": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SkillEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "certifications": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CertificationEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "languages": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LanguageEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "volunteering": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VolunteerEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "projects": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProjectEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "publications": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicationEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "honors": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HonorEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "courses": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CourseEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "organizations": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OrganizationEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "recommendations": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RecommendationEntry"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    }
+  },
+  "required": [
+    "identity",
+    "headline",
+    "location",
+    "about",
+    "profile_image",
+    "background_image",
+    "experience",
+    "education",
+    "skills",
+    "certifications",
+    "languages"
+  ],
+  "definitions": {
+    "FieldStatus": {
+      "type": "string",
+      "enum": [
+        "present",
+        "not_provided",
+        "not_visible_to_viewer",
+        "not_available_from_endpoint",
+        "not_loaded",
+        "upstream_failed",
+        "parser_failed",
+        "stale_or_expired",
+        "unknown"
+      ]
+    },
+    "ProvenanceMetadata": {
+      "type": "object",
+      "properties": {
+        "source_operation": {
+          "type": "string"
+        },
+        "observation_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "raw_entity_reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "normalization_performed": {
+          "type": "string"
+        },
+        "schema_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_operation",
+        "observation_time",
+        "schema_version"
+      ]
+    },
+    "StringField": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "ImageField": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "raw_cdn_url": {
+              "type": "string"
+            },
+            "vector_artifact_id": {
+              "type": "string"
+            },
+            "expires_at": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "raw_cdn_url"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/FieldStatus"
+        },
+        "provenance": {
+          "$ref": "#/definitions/ProvenanceMetadata"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ]
+    },
+    "ExperienceEntry": {
+      "type": "object",
+      "properties": {
+        "position_urn": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "company_name": {
+          "type": "string"
+        },
+        "company_urn": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start_date": {
+          "$ref": "#/definitions/DateObject"
+        },
+        "end_date": {
+          "$ref": "#/definitions/DateObject"
+        },
+        "location_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grouped_promotions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PromotionItem"
+          }
+        }
+      },
+      "required": [
+        "position_urn",
+        "title",
+        "company_name",
+        "start_date"
+      ]
+    },
+    "PromotionItem": {
+      "type": "object",
+      "properties": {
+        "position_urn": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "start_date": {
+          "$ref": "#/definitions/DateObject"
+        },
+        "end_date": {
+          "$ref": "#/definitions/DateObject"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "position_urn",
+        "title",
+        "start_date"
+      ]
+    },
+    "EducationEntry": {
+      "type": "object",
+      "properties": {
+        "education_urn": {
+          "type": "string"
+        },
+        "school_name": {
+          "type": "string"
+        },
+        "school_urn": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "degree_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "field_of_study": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start_date": {
+          "$ref": "#/definitions/DateObject"
+        },
+        "end_date": {
+          "$ref": "#/definitions/DateObject"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "education_urn",
+        "school_name"
+      ]
+    },
+    "SkillEntry": {
+      "type": "object",
+      "properties": {
+        "skill_urn": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "endorsement_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "skill_urn",
+        "name"
+      ]
+    },
+    "CertificationEntry": {
+      "type": "object",
+      "properties": {
+        "certification_urn": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "authority": {
+          "type": "string"
+        },
+        "license_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start_date": {
+          "$ref": "#/definitions/DateObject"
+        },
+        "end_date": {
+          "$ref": "#/definitions/DateObject"
+        }
+      },
+      "required": [
+        "certification_urn",
+        "name",
+        "authority"
+      ]
+    },
+    "LanguageEntry": {
+      "type": "object",
+      "properties": {
+        "language_urn": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "proficiency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "language_urn",
+        "name"
+      ]
+    },
+    "VolunteerEntry": {
+      "type": "object",
+      "properties": {
+        "volunteer_urn": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "organization_name": {
+          "type": "string"
+        },
+        "cause": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "volunteer_urn",
+        "role",
+        "organization_name"
+      ]
+    },
+    "ProjectEntry": {
+      "type": "object",
+      "properties": {
+        "project_urn": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "associated_with": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "project_urn",
+        "title"
+      ]
+    },
+    "PublicationEntry": {
+      "type": "object",
+      "properties": {
+        "publication_urn": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "publication_urn",
+        "title"
+      ]
+    },
+    "HonorEntry": {
+      "type": "object",
+      "properties": {
+        "honor_urn": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "issuer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "honor_urn",
+        "title"
+      ]
+    },
+    "CourseEntry": {
+      "type": "object",
+      "properties": {
+        "course_urn": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "course_urn",
+        "name"
+      ]
+    },
+    "OrganizationEntry": {
+      "type": "object",
+      "properties": {
+        "organization_urn": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "position": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "organization_urn",
+        "name"
+      ]
+    },
+    "RecommendationEntry": {
+      "type": "object",
+      "properties": {
+        "recommendation_urn": {
+          "type": "string"
+        },
+        "recommender_name": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "recommendation_urn",
+        "recommender_name",
+        "text"
+      ]
+    },
+    "DateObject": {
+      "type": "object",
+      "properties": {
+        "year": {
+          "type": "integer"
+        },
+        "month": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "day": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "year"
+      ]
+    }
+  }
+}

@@ -1,0 +1,176 @@
+openapi: 3.1.0
+info:
+  title: LinkedIn Profile Normalized API
+  version: 1.0.0
+  description: Public HTTPS microservice accepting a LinkedIn profile URL and returning structured JSON data. Built completely on a browser-less, direct-endpoint execution model.
+paths:
+  /v1/profiles:
+    get:
+      summary: Retrieve normalized profile data
+      description: Resolves the provided LinkedIn URL, queries the upstream API, and returns normalized JSON data. Enforces 9-State Field Ontology and includes field-level provenance metadata.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: Fully qualified LinkedIn public profile URL
+          schema:
+            type: string
+            format: uri
+            example: https://www.linkedin.com/in/jane-doe
+      responses:
+        '200':
+          description: Structured profile data returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '400':
+          description: Invalid input URL, malformed syntax, or SSRF trigger detected
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Missing, invalid, or expired API authentication token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Target profile not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '502':
+          description: Upstream server error, challenge triggered, or schema drift detected
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - detail
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI reference identifying the problem type
+        title:
+          type: string
+          description: Short, human-readable summary of the problem
+        status:
+          type: integer
+          description: HTTP status code set by the server
+        detail:
+          type: string
+          description: Detailed explanation of the error
+        instance:
+          type: string
+          format: uri
+          description: Unique URI identifying the specific occurrence of the problem
+    ProfileResponse:
+      type: object
+      required:
+        - identity
+        - positions
+        - educations
+      properties:
+        identity:
+          type: object
+          required:
+            - slug
+            - urn
+            - firstName
+            - lastName
+          properties:
+            slug:
+              $ref: '#/components/schemas/FieldContainer'
+            urn:
+              $ref: '#/components/schemas/FieldContainer'
+            firstName:
+              $ref: '#/components/schemas/FieldContainer'
+            lastName:
+              $ref: '#/components/schemas/FieldContainer'
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PositionItem'
+        educations:
+          type: array
+          items:
+            $ref: '#/components/schemas/EducationItem'
+    FieldContainer:
+      type: object
+      required:
+        - value
+        - status
+      properties:
+        value:
+          type: string
+          nullable: true
+          description: The normalized field value
+        status:
+          type: string
+          enum: [present, not_provided, not_visible_to_viewer, not_available_from_endpoint, not_loaded, upstream_failed, parser_failed, stale_or_expired, unknown]
+        provenance:
+          $ref: '#/components/schemas/ProvenanceMetadata'
+    ProvenanceMetadata:
+      type: object
+      required:
+        - source_operation
+        - observation_time
+        - raw_entity_reference
+        - normalization_performed
+        - schema_version
+      properties:
+        source_operation:
+          type: string
+        observation_time:
+          type: string
+          format: date-time
+        raw_entity_reference:
+          type: string
+        normalization_performed:
+          type: string
+        schema_version:
+          type: string
+    PositionItem:
+      type: object
+      required:
+        - title
+        - companyName
+      properties:
+        title:
+          $ref: '#/components/schemas/FieldContainer'
+        companyName:
+          $ref: '#/components/schemas/FieldContainer'
+    EducationItem:
+      type: object
+      required:
+        - degreeName
+        - schoolName
+      properties:
+        degreeName:
+          $ref: '#/components/schemas/FieldContainer'
+        schoolName:
+          $ref: '#/components/schemas/FieldContainer'

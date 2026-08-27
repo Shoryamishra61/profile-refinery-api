@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/tross-linkedin-profile-v1.json",
+  "title": "TrossLinkedInProfileResponse",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "input_url",
+    "canonical_url",
+    "observed_at",
+    "partial",
+    "profile",
+    "meta"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "input_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "canonical_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "partial": {
+      "type": "boolean"
+    },
+    "profile": {
+      "type": "object",
+      "required": [
+        "identity",
+        "name",
+        "headline",
+        "location",
+        "about",
+        "experience",
+        "education",
+        "skills",
+        "certifications",
+        "languages",
+        "profile_image"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/field"
+        },
+        "name": {
+          "$ref": "#/$defs/field"
+        },
+        "headline": {
+          "$ref": "#/$defs/field"
+        },
+        "location": {
+          "$ref": "#/$defs/field"
+        },
+        "about": {
+          "$ref": "#/$defs/field"
+        },
+        "experience": {
+          "$ref": "#/$defs/field"
+        },
+        "education": {
+          "$ref": "#/$defs/field"
+        },
+        "skills": {
+          "$ref": "#/$defs/field"
+        },
+        "certifications": {
+          "$ref": "#/$defs/field"
+        },
+        "languages": {
+          "$ref": "#/$defs/field"
+        },
+        "profile_image": {
+          "$ref": "#/$defs/field"
+        },
+        "background_image": {
+          "$ref": "#/$defs/field"
+        },
+        "volunteering": {
+          "$ref": "#/$defs/field"
+        },
+        "projects": {
+          "$ref": "#/$defs/field"
+        },
+        "publications": {
+          "$ref": "#/$defs/field"
+        },
+        "honors": {
+          "$ref": "#/$defs/field"
+        },
+        "courses": {
+          "$ref": "#/$defs/field"
+        },
+        "organizations": {
+          "$ref": "#/$defs/field"
+        },
+        "recommendations": {
+          "$ref": "#/$defs/field"
+        }
+      },
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "required": [
+        "viewer_context",
+        "operations_attempted",
+        "operations_succeeded",
+        "warnings"
+      ],
+      "properties": {
+        "viewer_context": {
+          "type": "string"
+        },
+        "operations_attempted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "operations_succeeded": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "present",
+        "not_provided",
+        "not_visible_to_viewer",
+        "not_available_from_endpoint",
+        "upstream_failed",
+        "parser_failed",
+        "stale_or_expired",
+        "unknown"
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "source_operation",
+        "observation_time",
+        "parser_version"
+      ],
+      "properties": {
+        "source_operation": {
+          "type": "string"
+        },
+        "observation_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "raw_entity_reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parser_version": {
+          "type": "string"
+        },
+        "normalization_notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "value",
+        "status",
+        "provenance"
+      ],
+      "properties": {
+        "value": {},
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

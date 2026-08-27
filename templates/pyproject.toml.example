@@ -1,0 +1,8 @@
+[project]
+name = "tross-linkedin-profile-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["fastapi","uvicorn[standard]","httpx","pydantic>=2","pydantic-settings","jsonschema","PyYAML"]
+
+[project.optional-dependencies]
+dev = ["pytest","pytest-asyncio","respx","ruff","mypy"]

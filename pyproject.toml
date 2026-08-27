@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tross-linkedin-api"
+version = "1.0.0"
+description = "Browserless, registry-driven LinkedIn profile API research implementation"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Shorya Mishra" }]
+dependencies = [
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "jsonschema[format]>=4.25,<5",
+  "pydantic>=2.11,<3",
+  "pydantic-settings>=2.10,<3",
+  "PyYAML>=6.0.2,<7",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.17,<2",
+  "pip-audit>=2.9,<3",
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.1,<2",
+  "respx>=0.22,<1",
+  "ruff>=0.12,<1",
+  "types-jsonschema>=4.25,<5",
+  "types-PyYAML>=6.0.12,<7",
+]
+
+[project.scripts]
+tross-benchmark = "tross_linkedin_api.benchmark:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tross_linkedin_api"]
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers --strict-config"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["11_ARCHIVE_ORIGINALS"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
+ignore = ["E501", "S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/tross_linkedin_api"]
+exclude = ["11_ARCHIVE_ORIGINALS"]

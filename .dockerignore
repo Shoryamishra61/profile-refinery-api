@@ -1,0 +1,12 @@
+.git
+.venv
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+11_ARCHIVE_ORIGINALS
+09_AGENT_PROMPTS
+benchmark-results
+*.har
+.env*
+
