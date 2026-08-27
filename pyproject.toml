@@ -35,6 +35,9 @@ dev = [
 [project.scripts]
 tross-benchmark = "tross_linkedin_api.benchmark:main"
 
+[tool.vercel]
+entrypoint = "src.tross_linkedin_api.main:app"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/tross_linkedin_api"]
 

@@ -185,6 +185,24 @@ docker build -t tross-linkedin-profile-api:local .
 The [reproducibility guide](REPRODUCIBILITY.md) explains the clean-room and
 independence checks.
 
+## Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FShoryamishra61%2Ftross-linkedin-profile-api&env=APP_API_KEYS,APP_MODE&envDescription=Generate%20a%20random%20API%20key.%20Use%20fixture%20mode%20until%20all%20live%20operations%20are%20currently%20verified.&envLink=https%3A%2F%2Fgithub.com%2FShoryamishra61%2Ftross-linkedin-profile-api%23evidence-model)
+
+Vercel loads the FastAPI ASGI application through the entrypoint declared in
+`pyproject.toml`. For an honest public demonstration, configure:
+
+- `APP_MODE=fixture`
+- `APP_API_KEYS=<a newly generated random key>`
+
+After deployment, verify `/healthz`, `/readyz`, `/openapi.json`, and an
+authenticated request to `/v1/profiles`. This deployment demonstrates the complete
+synthetic-fixture pipeline; it is not a live LinkedIn extraction claim.
+
+Do not set `APP_MODE=live` until the [live activation protocol](#live-activation-protocol)
+is complete and all LinkedIn secrets and current query identifiers are stored in Vercel's
+encrypted environment settings.
+
 ## Live activation protocol
 
 Do not enable live mode by copying historical routes or guessing query identifiers.
