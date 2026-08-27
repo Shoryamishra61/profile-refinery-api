@@ -15,5 +15,6 @@
 | F-009 | Live operation work could not start | No owned LinkedIn session, authorized network capture, current identifiers, or ground-truth profiles | Completed all offline work; registry makes live enablement fail closed | EXTERNAL |
 | F-010 | `pip-audit` reported `PYSEC-2026-1845` in pytest 8.4.2 | Original dev constraint excluded the fixed major release | Raised pytest floor to 9.0.3, relocked, and reran the suite/audit | FIXED |
 | F-011 | GitHub rejected the active CI workflow on push | Authenticated OAuth token has `repo` but not `workflow`; SSH key and connected browser were unavailable | Published all source/tests/docs publicly with the workflow mirrored as `.example`; local main remains complete | EXTERNAL PERMISSION |
+| F-012 | Maintained Markdown had 814 default-linter findings | The supplied corpus had no shared Markdown policy and used research tables, long source URLs, and compact generated prose | Added an explicit policy, auto-fixed safe spacing/EOF issues, and reran lint across 56 maintained files | FIXED |
 
 No checkpoint was triggered because no live LinkedIn request was attempted.

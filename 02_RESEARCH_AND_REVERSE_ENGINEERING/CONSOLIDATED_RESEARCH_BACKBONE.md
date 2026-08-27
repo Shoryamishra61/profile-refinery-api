@@ -7,6 +7,7 @@ This report treats the 14 supplied research reports as one corpus and accepts th
 A source-manifest audit found an important reproducibility gap: the supplied reports contain **108 unique explicit URLs**, not a single canonical 168-row bibliography. The remaining source count is represented through named references, duplicated records, or prose citations rather than a complete row-level URL manifest. Because the governing quality rule is “never fabricate,” this report does **not** invent the missing manifest entries merely to recreate 168 rows.
 
 Instead, the deliverables are:
+
 1. a decision-grade consolidated research report;
 2. a canonical high-value inventory of **72** sources that should actually drive the assignment;
 3. the **108-URL raw explicit-link manifest** extracted from all 14 reports, preserving traceability;
@@ -23,6 +24,7 @@ The high-value bibliography deliberately excludes low-marginal-value SEO pages, 
 The semantic target is not “the LinkedIn profile.” The target is a **viewer-conditioned observation of a profile at a specific time**.
 
 The same URL can yield materially different observable fields depending on:
+
 - logged-out versus authenticated state;
 - member-controlled public/off-LinkedIn visibility;
 - connection degree;
@@ -48,6 +50,7 @@ This resolves the first major decision: **the official path is an essential base
 LinkedIn's current User Agreement, Prohibited Software help, Automated Activity guidance and crawling terms must be treated as P0 constraints. The corpus's early “hiQ made LinkedIn scraping legal” phrasing is not supportable.
 
 A defensible legal-layer reading separates:
+
 - **CFAA/computer-access doctrine**;
 - **contract/platform authorization**;
 - **privacy/data-protection law**;
@@ -68,6 +71,7 @@ For India, use the DPDP Act, official commencement notification, and 2025 Rules 
 Current July 2026 first-party material establishes two materially different products:
 
 **Profile Scraper**
+
 - LinkedIn session-backed;
 - vendor says it extracts via API calls and does not register a profile visit;
 - current support page lists a profile image URL;
@@ -77,12 +81,14 @@ Current July 2026 first-party material establishes two materially different prod
 - vendor claims up to 1,500 profiles/day.
 
 **Profile Visitor**
+
 - explicitly visits profiles;
 - richer output;
 - includes endorsements, profile pictures and full-profile screenshots;
 - materially different footprint.
 
 Two corrections follow:
+
 1. “PhantomBuster has no profile-image URL” is stale against the current support page.
 2. “1,500/day is safe” is **PhantomBuster's vendor guidance**, not a LinkedIn-published or independently validated restriction threshold.
 
@@ -99,6 +105,7 @@ This is more relevant than dozens of “is scraping legal?” SEO posts.
 The corpus contains many numbers for “safe actions/day,” account bans, proxy success rates and challenge thresholds. They disagree, are often vendor marketing, and are not supported by LinkedIn's official rate-limit documentation.
 
 Therefore:
+
 - do not cite an exact ban probability;
 - do not claim a universal safe daily threshold;
 - do not use proxy-vendor success percentages as LinkedIn-specific performance evidence.
@@ -130,6 +137,7 @@ If learned extraction is later evaluated, it must be compared against determinis
 ## 1.10 The highest-value “better than PhantomBuster” dimension is not more aggressive access
 
 A student system is unlikely to outcompete a mature vendor on session fleets or enrichment marketplaces. The defensible advantage is **contract quality**:
+
 - explicit provenance;
 - field-level availability reasons;
 - schema versioning;
@@ -271,27 +279,35 @@ The reports converge strongly on these points:
 # 5. Disagreements and Resolutions
 
 ## D1. “hiQ made scraping legal”
+
 **Resolution:** Reject. The 2022 Ninth Circuit ruling is narrow, public/gates-down and preliminary-injunction focused. Later district-court contract findings and the consent judgment matter.
 
 ## D2. “Meta v Bright Data means credentials are fine”
+
 **Resolution:** Reject. Different platform, terms and login state. The court's logged-off/public distinction is precisely why this is not a transferable credentialed-access warrant.
 
 ## D3. “PhantomBuster extracts no profile image”
+
 **Resolution:** Stale/contradicted. The current July 2026 support article lists `linkedinProfileImageUrl`. Preserve the documentation contradiction as a versioning lesson.
 
 ## D4. “PhantomBuster = full profile”
+
 **Resolution:** Reject as a generic statement. Its current Profile Scraper explicitly limits history and omits endorsements/screenshots; the Visitor product is richer.
 
 ## D5. “1,500/day is a safe LinkedIn limit”
+
 **Resolution:** Downgrade. Accurate only as “PhantomBuster currently recommends/claims this for its product.” It is not a LinkedIn-published limit and not independently established.
 
 ## D6. “Residential proxies are 99%+ successful”
+
 **Resolution:** Do not use as LinkedIn-specific evidence. Vendor marketing about protected websites does not establish this assignment's success rate.
 
 ## D7. “LLM extraction self-heals schema changes”
+
 **Resolution:** Unsupported. Treat as a hypothesis requiring benchmark evidence, not as architecture.
 
 ## D8. “publicly available = privacy-exempt”
+
 **Resolution:** Reject as a cross-jurisdictional statement. Statutory treatment differs; GDPR/privacy regulators explicitly warn that public accessibility does not remove data-protection obligations.
 
 ---
@@ -301,14 +317,18 @@ The reports converge strongly on these points:
 ## P0 — Generate evidence, do not search more generally
 
 ### G1. Assignment field-recall / visibility matrix
+
 For each required field, measure whether it is observable under each consented viewer state.
 
 ### G2. Ground-truth definition
+
 Define “most information” as:
 `fields visible to viewer V at timestamp T`, not “whatever one extractor returned.”
 
 ### G3. Missingness ontology
+
 At minimum distinguish:
+
 - `not_provided`
 - `not_visible_to_viewer`
 - `not_available_in_surface`
@@ -318,15 +338,19 @@ At minimum distinguish:
 - `unknown`
 
 ### G4. Evaluator incentive/rubric
+
 Determine whether a ToS-honest partial implementation is rewarded more than a brittle cookie clone. This cannot be inferred from scraper marketing.
 
 ### G5. Independent PhantomBuster black-box comparison
+
 If lawful/appropriate, compare PB output to the same consented ground truth. Do **not** assume its “no visit” claim proves underlying mechanism.
 
 ### G6. Image URL lifetime
+
 Measure signed/ephemeral image behavior over time rather than assuming stable media URLs.
 
 ### G7. India DPDP application
+
 Track official Board/government interpretation as it develops; avoid inventing settled doctrine for publicly posted professional data.
 
 ---
@@ -334,7 +358,9 @@ Track official Board/government interpretation as it develops; avoid inventing s
 # 7. Recommended Research Sequence
 
 ## Stage 1 — Lock the rules of the problem
+
 Study:
+
 - User Agreement
 - Prohibited Software
 - Profile API
@@ -347,14 +373,17 @@ Study:
 **Output:** one-page legal/platform layer memo separating contract, CFAA and privacy.
 
 ## Stage 2 — Define the semantic contract before implementation
+
 Create the complete assignment field taxonomy and explicit `availability_reason` model.
 
 **Output:** JSON Schema draft + source/provenance fields + partial-success semantics.
 
 ## Stage 3 — Build the consented fixture pack
+
 Use the developer's own profile plus volunteers who explicitly consent.
 
 Capture:
+
 - controlled section presence/absence;
 - visibility settings;
 - viewer relationship state;
@@ -363,9 +392,11 @@ Capture:
 **Output:** evaluation corpus, not production data.
 
 ## Stage 4 — Measure acquisition families
+
 Compare methods at the level of **observable field recall**, not sophistication.
 
 Candidate families:
+
 - sanctioned OAuth/self baseline;
 - logged-out public representation;
 - consented rendered-browser observation;
@@ -374,14 +405,18 @@ Candidate families:
 Do not optimize bypass behavior. The research question is what each surface can faithfully observe.
 
 ## Stage 5 — Normalize and prove provenance
+
 Map each returned field to:
+
 - source surface;
 - observation timestamp;
 - raw-to-normalized transformation;
 - confidence/availability state.
 
 ## Stage 6 — Drift and regression testing
+
 Replay fixtures across upstream changes. Track:
+
 - field disappearance;
 - section-layout changes;
 - media expiry;
@@ -389,12 +424,15 @@ Replay fixtures across upstream changes. Track:
 - partial failure.
 
 ## Stage 7 — Only then choose service architecture
+
 Select sync/async behavior, caching, worker model and deployment from measured latency/failure data.
 
 This order deliberately prevents a premature “Voyager + Redis + FastAPI” answer.
 
 ## Stage 8 — Evaluate optional learned methods
+
 Only if deterministic extraction fails measurably:
+
 - define the failure slice;
 - add a learned baseline;
 - require grounding to source content;
@@ -425,6 +463,7 @@ Minimum useful matrix:
 ## 8.2 Ground truth
 
 Human-label the fields actually visible in the corresponding consented view. Store:
+
 - timestamp;
 - viewer-state label;
 - field value;
@@ -435,27 +474,35 @@ Human-label the fields actually visible in the corresponding consented view. Sto
 ## 8.3 Core metrics
 
 ### Field precision
+
 Of returned fields, how many match ground truth?
 
 ### Observable-field recall
+
 Of fields visible to that viewer, how many were returned?
 
 ### Availability-class accuracy
+
 Did the system correctly distinguish hidden/unavailable/failed rather than returning an undifferentiated null?
 
 ### Section coverage
+
 Experience, education, skills, certifications, languages, about, media.
 
 ### Freshness
+
 Difference between observed source state and returned cached state.
 
 ### Failure transparency
+
 Fraction of failures mapped to a correct typed error/partial-response reason.
 
 ### Latency
+
 P50/P95 by acquisition family.
 
 ### Drift recovery
+
 Regression success after a deliberate fixture/schema change.
 
 ## 8.4 Baselines
@@ -573,18 +620,21 @@ The evidence supports these **design principles**, not a specific scraping stack
 General web search is now lower value than measurement.
 
 Stop searching when:
+
 - a claim is already supported by primary platform/legal/regulatory evidence;
 - new results only repeat vendor/SEO summaries;
 - numeric restriction claims lack independent data;
 - operational anti-detect material adds bypass detail rather than decision value.
 
 Resume external research only for a **specific unresolved question**, such as:
+
 - a new LinkedIn policy/API release;
 - a new court/regulator decision;
 - a concrete DPDP Board interpretation;
 - a newly published benchmark directly relevant to viewer-conditioned profile extraction.
 
 The next high-value work is **generated evidence**:
+
 1. the consented visibility/field-recall matrix;
 2. the legal-layer memo;
 3. the schema/missingness contract;

@@ -1,33 +1,153 @@
 # Tross LinkedIn Profile API
 
-A research-grade FastAPI service that turns a validated LinkedIn member URL into a stable, provenance-carrying JSON profile. The runtime has no browser, DOM, screenshot, CAPTCHA, proxy-rotation, or fingerprint-spoofing path. All upstream calls are direct HTTP requests to a fixed LinkedIn origin and must come from an evidence-gated operation registry.
+**A browserless, evidence-gated research implementation for transforming a validated
+LinkedIn member URL into a stable, provenance-carrying JSON profile.**
 
-## Current status
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.116+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Tests](https://img.shields.io/badge/tests-54%20passing-2E7D32.svg)](RESULTS.md)
+[![Evidence](https://img.shields.io/badge/live%20evidence-blocked-D97706.svg)](JUDGE_AUDIT.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-The complete fixture/offline system is implemented and verified. The current registry entries are `FIXTURE_VERIFIED`, so live mode intentionally refuses to start. A current authorized network observation, direct replay, redacted fixture, and runtime secrets are still required before any operation can be relabeled `live_verified`. Public HTTPS deployment and controlled-live quality metrics therefore remain blocked; see [JUDGE_AUDIT.md](JUDGE_AUDIT.md).
+> [!IMPORTANT]
+> The fixture/offline system is implemented and independently verified. The checked-in
+> operations are `fixture_verified`, not evidence that LinkedIn currently serves the same
+> private response shapes. Live mode therefore fails closed until every enabled operation
+> has current, authorized replay evidence.
 
-The fixture API exercises name, headline, location, about, experience, education, skills, certifications, languages, media, provenance, partial results, request-count instrumentation, schema validation, and error behavior. It is not evidence that LinkedIn currently returns those fixture shapes.
+## Abstract
 
-## Architecture
+A LinkedIn profile is not a static record. What can be observed depends on the viewer,
+authentication state, relationship, product entitlement, field-level visibility, and time.
+Most profile-extraction interfaces erase this uncertainty by returning values or `null`.
+Tross instead models extraction as a time-bound observation and attaches availability,
+source operation, and observation provenance to every supported field.
 
-```text
-caller -> API-key/rate limit -> strict URL canonicalizer -> semantic operation registry
-       -> fixture or direct-HTTP transport -> deterministic parsers -> normalizer
-       -> partial-result engine -> Pydantic + JSON Schema 2020-12 -> response
+The implementation separates volatile upstream operations from stable application logic
+through a semantic registry. It uses direct HTTP requests to a fixed LinkedIn origin and
+contains no browser automation, DOM parsing, screenshot extraction, CAPTCHA solving,
+proxy rotation, or fingerprint spoofing. A checkpoint or authorization failure makes the
+session unavailable and requires manual operator action.
+
+The current release demonstrates the architecture, contract, security boundary, partial
+result behavior, and evaluation method against synthetic fixtures. It deliberately does
+not claim live LinkedIn correctness, production safety, or legal authorization.
+
+## Research question
+
+> Can a profile-by-URL API remain useful while making upstream uncertainty, operation
+> drift, partial failure, and evidence quality explicit?
+
+The design follows four conclusions from the supplied research corpus:
+
+1. Official member APIs are important baselines but do not provide unrestricted rich
+   third-party profile lookup by arbitrary URL.
+2. Private web operations are volatile observations, not permanent endpoints.
+3. `absent`, `hidden`, `not_loaded`, `unavailable`, and `extraction_failed` are
+   different states and must not collapse into one `null`.
+4. Compliance and account risk cannot be solved with anti-detection engineering; the
+   system must fail closed and preserve an auditable evidence boundary.
+
+See the [research synthesis](02_RESEARCH_AND_REVERSE_ENGINEERING/RESEARCH_SYNTHESIS.md),
+[consolidated research backbone](02_RESEARCH_AND_REVERSE_ENGINEERING/CONSOLIDATED_RESEARCH_BACKBONE.md),
+and [source-of-truth hierarchy](00_START_HERE/SOURCE_OF_TRUTH.md).
+
+## Contributions
+
+- **Evidence-gated operation registry.** Business logic refers to semantic operations;
+  query identifiers, evidence dates, fixtures, and verification status live in one registry.
+- **Provenance-first response model.** Twelve profile fields carry availability and source
+  metadata rather than ambiguous missing values.
+- **Fail-closed live activation.** Fixture or historical operations cannot start in live
+  mode; missing session values or current query identifiers are startup errors.
+- **Deterministic partial-result engine.** Optional section failure returns a valid partial
+  response without silently corrupting successful sections.
+- **Independent fixture evaluation.** Expected answers are checked in separately from raw
+  upstream-shaped fixtures and are never generated from extractor output.
+- **No-browser runtime boundary.** Production dependencies and source are scanned for
+  browser, DOM, and prohibited evasion mechanisms.
+
+## System model
+
+```mermaid
+flowchart LR
+    A[Profile URL] --> B[API key + rate limit]
+    B --> C[Strict URL canonicalizer]
+    C --> D[Semantic operation registry]
+    D --> E{Runtime mode}
+    E -->|fixture| F[Synthetic fixture transport]
+    E -->|live_verified only| G[Fixed-origin direct HTTP]
+    F --> H[Deterministic parsers]
+    G --> H
+    H --> I[Normalizer + partial-result engine]
+    I --> J[Pydantic + JSON Schema 2020-12]
+    J --> K[Profile response + provenance]
 ```
 
-Volatile paths and query identifiers never appear in business logic. Live session values are loaded only from runtime secrets. A 401/403 or recognized checkpoint makes the session unavailable until manual operator action.
+The API surface is intentionally small:
 
-## Fresh setup
+| Route | Authentication | Purpose |
+|---|---|---|
+| `GET /healthz` | none | Process liveness |
+| `GET /readyz` | none | Configuration and registry readiness |
+| `GET /v1/profiles?url=...` | `X-API-Key` | Normalize one LinkedIn member URL |
+| `GET /openapi.json` | none | OpenAPI 3.1 contract |
+| `GET /docs` | none | Interactive API documentation |
+
+Full request, response, status, and error semantics are in the
+[API reference](API_REFERENCE.md).
+
+## Evidence model
+
+| Evidence class | Meaning | Permitted claim |
+|---|---|---|
+| `fixture_verified` | Parser and pipeline tested against synthetic upstream-shaped data | Offline correctness only |
+| `historical_reference` | Useful prior observation without current replay | Research/reference only |
+| `live_verified` | Current authorized capture, direct replay, redacted fixture, and contract test | Eligible for live runtime |
+| `unknown` | No adequate evidence | No operational claim |
+
+Only `live_verified` operations may be enabled in live mode. The checked-in registry
+contains six fixture-verified operations and zero live-verified operations.
+
+## Verified results
+
+Evidence date: **2026-08-27**. Evidence class: **`fixture_verified`**.
+
+| Verification gate | Result | Scope |
+|---|---:|---|
+| Test suite | 54 passed | Unit, integration, schema, drift, security |
+| Ruff | Pass | Production, tests, scripts |
+| mypy strict | Pass | 18 production modules |
+| Primitive-field correctness | 4/4 | One synthetic profile |
+| Nested-entry recall | 8/8 | One synthetic profile |
+| Availability-status accuracy | 12/12 | One synthetic profile |
+| Provenance coverage | 12/12 | One synthetic profile |
+| Browser production dependencies | 0 | Manifest and source scan |
+| Dependency vulnerabilities | 0 known | `pip-audit`; local package excluded from PyPI lookup |
+| Clean-clone verification | Pass | Install, test, benchmark, security scan |
+| Container smoke test | Pass | Health and authenticated fixture request |
+
+Fixture measurements are not live extraction metrics. No controlled-live dataset,
+LinkedIn operation replay, public HTTPS evaluator run, or independent PhantomBuster run
+was available. Those results remain `unknown`, not zero and not pass. See
+[results](RESULTS.md), [limitations](LIMITATIONS.md), and the
+[adversarial judge audit](JUDGE_AUDIT.md).
+
+## Reproduce locally
 
 Requirements: Git, [uv](https://docs.astral.sh/uv/), and Python 3.12+.
+
+```bash
+git clone https://github.com/Shoryamishra61/tross-linkedin-profile-api.git
+cd tross-linkedin-profile-api
+uv sync --extra dev --locked --python 3.12
+```
+
+Generate a local API key and start the deterministic fixture service.
 
 PowerShell:
 
 ```powershell
-git clone https://github.com/Shoryamishra61/tross-linkedin-profile-api.git
-Set-Location tross-linkedin-profile-api
-uv sync --extra dev --locked --python 3.12
 $env:APP_API_KEYS = uv run python -c "import secrets; print(secrets.token_urlsafe(32))"
 $env:APP_MODE = "fixture"
 uv run uvicorn tross_linkedin_api.main:app --host 127.0.0.1 --port 8000
@@ -36,25 +156,21 @@ uv run uvicorn tross_linkedin_api.main:app --host 127.0.0.1 --port 8000
 Bash:
 
 ```bash
-git clone https://github.com/Shoryamishra61/tross-linkedin-profile-api.git
-cd tross-linkedin-profile-api
-uv sync --extra dev --locked --python 3.12
 export APP_API_KEYS="$(uv run python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export APP_MODE=fixture
 uv run uvicorn tross_linkedin_api.main:app --host 127.0.0.1 --port 8000
 ```
 
-In another shell, substitute the generated key:
+Then call the synthetic profile from another shell, substituting the generated key:
 
 ```bash
 curl http://127.0.0.1:8000/healthz
 curl http://127.0.0.1:8000/readyz
-curl -H "X-API-Key: YOUR_GENERATED_KEY" "http://127.0.0.1:8000/v1/profiles?url=https%3A%2F%2Fwww.linkedin.com%2Fin%2Fsynthetic-profile"
+curl -H "X-API-Key: YOUR_GENERATED_KEY" \
+  "http://127.0.0.1:8000/v1/profiles?url=https%3A%2F%2Fwww.linkedin.com%2Fin%2Fsynthetic-profile"
 ```
 
-Interactive documentation is at `/docs`; OpenAPI 3.1 is at `/openapi.json`.
-
-## Verification
+Run the complete verification suite:
 
 ```bash
 uv run ruff check src tests scripts
@@ -63,34 +179,79 @@ uv run pytest
 uv run python scripts/security_audit.py
 uv run tross-benchmark --json --iterations 10
 uv run pip-audit
+docker build -t tross-linkedin-profile-api:local .
 ```
 
-The expected benchmark output is independently authored in `tests/fixtures/expected/`; the evaluator never assigns extractor output to ground truth.
+The [reproducibility guide](REPRODUCIBILITY.md) explains the clean-room and
+independence checks.
 
-## Live-mode activation
+## Live activation protocol
 
-Do not turn on live mode by copying historical routes. Follow [REVERSE_ENGINEERING_METHOD.md](REVERSE_ENGINEERING_METHOD.md) with an owned/authorized account, then for each operation:
+Do not enable live mode by copying historical routes or guessing query identifiers.
+Follow the [reverse-engineering method](REVERSE_ENGINEERING_METHOD.md) using an owned,
+authorized account. For each semantic operation:
 
-1. capture only redacted request semantics;
-2. replay the operation through direct HTTP without bypass behavior;
-3. add the redacted fixture and parser contract tests;
-4. set a current `observed_at`, evidence reference, and `live_verified` status;
-5. inject `LINKEDIN_LI_AT`, `LINKEDIN_JSESSIONID`, and current query identifiers outside Git;
-6. set `APP_MODE=live`.
+1. capture only the minimum redacted request semantics;
+2. replay through direct HTTP without bypass behavior;
+3. add a redacted fixture and parser contract tests;
+4. record `observed_at`, an evidence reference, and `live_verified` status;
+5. inject session values and current query identifiers outside Git;
+6. start with `APP_MODE=live` and exercise readiness before traffic.
 
-The registry rejects fixture/historical operations in live mode and rejects enabled live GraphQL operations whose identifier environment value is missing.
+The runtime rejects an enabled GraphQL operation when its query-identifier environment
+value is missing. A 401, 403, or recognized checkpoint suspends the session; automated
+challenge solving is outside the design.
 
-## Documents
+## Repository guide
 
-- [Architecture](ARCHITECTURE.md)
-- [API reference](API_REFERENCE.md)
-- [Reverse-engineering method](REVERSE_ENGINEERING_METHOD.md)
-- [Results](RESULTS.md) and [limitations](LIMITATIONS.md)
-- [Security](SECURITY.md) and [privacy/platform risk](PRIVACY_AND_PLATFORM_NOTES.md)
-- [Reproducibility](REPRODUCIBILITY.md)
-- [PhantomBuster comparison](PHANTOMBUSTER_COMPARISON.md)
-- [Build log](BUILD_LOG.md), [failure log](FAILURE_LOG.md), and [assumptions](ASSUMPTION_REGISTER.md)
-- [Judge audit](JUDGE_AUDIT.md) and [demo](DEMO.md)
+| Path | Contents |
+|---|---|
+| `00_START_HERE/` | Precedence, audit, inventory, contributor instructions |
+| `01_PRODUCT_AND_REQUIREMENTS/` | PRD, requirements, SRS, traceability |
+| `02_RESEARCH_AND_REVERSE_ENGINEERING/` | Research corpus, evidence policy, protocol |
+| `03_ARCHITECTURE_AND_DESIGN/` | System design, decisions, failure model |
+| `04_API_AND_DATA_CONTRACTS/` | API, model, and operation-registry contracts |
+| `05_SECURITY_PRIVACY_RELIABILITY/` | Threat, privacy, and SRE analysis |
+| `06_TESTING_AND_EVALUATION/` | Test and benchmark methodology |
+| `07_IMPLEMENTATION_AND_RELEASE/` | Build, migration, deployment, Definition of Done |
+| `08_JUDGE_AND_DEMO/` | Demo plan and adversarial review framework |
+| `09_AGENT_PROMPTS/` | Preserved execution prompts |
+| `10_REFERENCE_DATA/` | Audited link inventories |
+| `11_ARCHIVE_ORIGINALS/` | Supplied historical artifacts, preserved unchanged |
+| `src/`, `tests/`, `schemas/`, `config/` | Executable implementation and contracts |
 
-Historical materials are preserved unchanged under `11_ARCHIVE_ORIGINALS/` and are not production truth.
+Final evidence documents:
 
+- [Architecture](ARCHITECTURE.md) · [API reference](API_REFERENCE.md) ·
+  [Security](SECURITY.md)
+- [Research method](REVERSE_ENGINEERING_METHOD.md) ·
+  [PhantomBuster comparison](PHANTOMBUSTER_COMPARISON.md) ·
+  [Privacy and platform notes](PRIVACY_AND_PLATFORM_NOTES.md)
+- [Results](RESULTS.md) · [Limitations](LIMITATIONS.md) ·
+  [Reproducibility](REPRODUCIBILITY.md)
+- [Build log](BUILD_LOG.md) · [Failure log](FAILURE_LOG.md) ·
+  [Assumption register](ASSUMPTION_REGISTER.md)
+- [Demo](DEMO.md) · [Adversarial judge audit](JUDGE_AUDIT.md)
+
+## Responsible-use boundary
+
+This repository is research software, not permission to collect personal data. LinkedIn's
+terms, privacy law, contractual obligations, and authorization requirements apply
+independently of technical feasibility. Use only accounts and profiles you are authorized
+to test, minimize retained data, never commit session credentials, and stop on restriction
+or checkpoint signals. See [privacy and platform notes](PRIVACY_AND_PLATFORM_NOTES.md)
+and [security](SECURITY.md).
+
+## Project status
+
+- Offline research implementation: **complete and verified**
+- Public source release: **available**
+- Live LinkedIn operations: **blocked pending current authorized evidence**
+- Public API deployment: **blocked pending live evidence and deployment credentials**
+
+The exact open gates and evidence are maintained in [JUDGE_AUDIT.md](JUDGE_AUDIT.md).
+
+## License
+
+Released under the [MIT License](LICENSE). Legal and platform-risk notes are informational
+and are not legal advice.

@@ -1,15 +1,18 @@
 # Definition of Done
 
 ## Build
+
 - [ ] fresh clone installs
 - [ ] no path hacks
 - [ ] fixtures/schema/registry shipped
 
 ## Tross pivot
+
 - [ ] direct LinkedIn HTTP runtime
 - [ ] no Selenium/Playwright/Puppeteer/Chromium/DOM/browser fallback
 
 ## Live functionality
+
 - [ ] URL -> live core fields on permitted profile
 - [ ] experience
 - [ ] education
@@ -20,6 +23,7 @@
 - [ ] partial response behavior
 
 ## Quality
+
 - [ ] independent fixture benchmark
 - [ ] independent controlled-live benchmark with sample sizes
 - [ ] no circular ground truth
@@ -27,6 +31,7 @@
 - [ ] operation drift test
 
 ## Security
+
 - [ ] no secrets in git/logs
 - [ ] API key required
 - [ ] fixed outbound host
@@ -34,6 +39,7 @@
 - [ ] challenge fail-closed
 
 ## Deployment/docs
+
 - [ ] HTTPS URL
 - [ ] health/readiness
 - [ ] evaluator request succeeds

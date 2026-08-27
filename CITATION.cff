@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this research implementation, please cite it as below."
+title: "Tross LinkedIn Profile API"
+type: software
+authors:
+  - family-names: Mishra
+    given-names: Shorya
+repository-code: "https://github.com/Shoryamishra61/tross-linkedin-profile-api"
+version: 1.0.0
+date-released: 2026-08-27
+license: MIT
+abstract: >-
+  A browserless, evidence-gated research implementation for transforming a
+  validated LinkedIn member URL into a provenance-carrying JSON profile.
+keywords:
+  - FastAPI
+  - provenance
+  - evidence-gated operations
+  - profile normalization
+  - reproducible research

@@ -15,4 +15,3 @@ Risk reduction in the implementation:
 - use synthetic checked-in fixtures and independently authored expected results.
 
 Before any real deployment, the operator must establish a lawful basis, retention/access/deletion processes, jurisdiction-specific notices, a platform-risk decision, and incident response. “Publicly visible” does not make personal data privacy-exempt.
-

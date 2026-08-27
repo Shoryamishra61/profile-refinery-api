@@ -26,4 +26,3 @@ uv run pip-audit
 ```
 
 The scanner is defense in depth, not proof that arbitrary binary archives contain no historical secret. The preserved archives were supplied as evidence and are not loaded by production.
-

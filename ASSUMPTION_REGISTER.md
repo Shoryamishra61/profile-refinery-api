@@ -16,4 +16,3 @@
 | A-12 | PhantomBuster has lower coverage or higher latency | `UNKNOWN` | No | same-profile controlled comparison |
 
 Excluded and not pursued: CAPTCHA solving, account/session farms, stolen sessions, proxy rotation, telemetry emulation, TLS/WAF fingerprint spoofing, browser runtime, and automatic query-ID harvesting.
-

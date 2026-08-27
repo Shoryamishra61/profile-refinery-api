@@ -1,4 +1,5 @@
 # Privacy and Platform-Risk Notes
+
 Engineering risk memo, not legal advice.
 
 LinkedIn's current User Agreement prohibits scraping/copying profiles and bypassing access controls/use limits. Tross nevertheless explicitly asks candidates to reverse engineer and directly call LinkedIn endpoints. State this tension honestly; do not claim LinkedIn approval/compliance.

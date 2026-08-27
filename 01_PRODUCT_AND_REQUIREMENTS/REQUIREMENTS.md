@@ -1,6 +1,7 @@
 # Requirements
 
 ## Functional
+
 - **FR-001** Accept a LinkedIn member profile URL.
 - **FR-002** Validate/canonicalize supported URL shapes before upstream access.
 - **FR-003** Production acquisition uses only direct HTTP calls to current evidence-backed LinkedIn endpoints.
@@ -23,6 +24,7 @@
 - **FR-020** Fresh clone contains everything needed except secrets.
 
 ## Non-functional
+
 - **NFR-001** Fixture/live/deployment metrics are separate.
 - **NFR-002** Secrets never appear in git/logs/errors.
 - **NFR-003** User input cannot control outbound host/path.
@@ -35,4 +37,5 @@
 - **NFR-010** No live latency SLA until measured.
 
 ## Explicit non-requirements
+
 Browser automation, CAPTCHA solving, account farms, proxy rotation, TLS fingerprint spoofing, telemetry emulation, contact/email enrichment, persistent people DB, ML/LLM extraction.

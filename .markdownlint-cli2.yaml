@@ -1,0 +1,27 @@
+config:
+  default: true
+  MD013: false
+  MD024:
+    siblings_only: true
+  MD025: false
+  MD033: false
+  MD034: false
+  MD036: false
+  MD041: false
+globs:
+  - "*.md"
+  - "00_START_HERE/**/*.md"
+  - "01_PRODUCT_AND_REQUIREMENTS/**/*.md"
+  - "02_RESEARCH_AND_REVERSE_ENGINEERING/**/*.md"
+  - "03_ARCHITECTURE_AND_DESIGN/**/*.md"
+  - "04_API_AND_DATA_CONTRACTS/**/*.md"
+  - "05_SECURITY_PRIVACY_RELIABILITY/**/*.md"
+  - "06_TESTING_AND_EVALUATION/**/*.md"
+  - "07_IMPLEMENTATION_AND_RELEASE/**/*.md"
+  - "08_JUDGE_AND_DEMO/**/*.md"
+  - "09_AGENT_PROMPTS/**/*.md"
+  - "10_REFERENCE_DATA/**/*.md"
+  - "tests/fixtures/**/*.md"
+ignores:
+  - "11_ARCHIVE_ORIGINALS/**"
+  - ".venv/**"

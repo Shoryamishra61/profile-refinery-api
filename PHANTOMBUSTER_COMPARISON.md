@@ -13,4 +13,3 @@ Evidence classes in this document are explicit.
 | Live field coverage | Not measured (`UNKNOWN`) | Not measured in a controlled same-profile experiment (`UNKNOWN`) |
 
 A defensible comparison requires the same consented profiles, viewer context, observation window, independently recorded truth, and end-to-end timing. Until then, no “faster,” “more complete,” or percentage advantage is claimed.
-

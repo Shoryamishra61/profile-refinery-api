@@ -17,4 +17,3 @@ Protocol claims use exactly one class: `PRIMARY_VERIFIED`, `LIVE_OBSERVED`, `FIX
 9. Compare the deployed normalized output to independently recorded human ground truth for viewer V at time T.
 
 The current repository has completed the fixture/parser methodology only. It has no `LIVE_OBSERVED` operation record because no authorized session/capture was available in the execution environment.
-

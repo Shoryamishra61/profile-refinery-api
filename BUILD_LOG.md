@@ -36,3 +36,14 @@
 - Added architecture, API, method, results, limitations, security, privacy/platform, comparison, reproducibility, demo, logs, and adversarial audit documents.
 - Created logical Git milestones for package, implementation, tests, documentation, and clean-room evidence.
 - Published `https://github.com/Shoryamishra61/tross-linkedin-profile-api` as PUBLIC. The OAuth token lacked `workflow` scope, so the public fallback mirrors CI at `ci/github-actions-ci.yml.example`; local `main` retains the active `.github/workflows/ci.yml`.
+
+### Public research-documentation release
+
+- Reframed the README as a research artifact with an abstract, research question,
+  contributions, evidence taxonomy, architecture, measured results, reproduction protocol,
+  repository map, responsible-use boundary, and explicit blocked gates.
+- Added MIT license and Citation File Format metadata.
+- Added a project-owned Markdown policy and mechanically normalized all 56 maintained
+  Markdown files; `11_ARCHIVE_ORIGINALS/` remained untouched.
+- Verified zero Markdown lint findings, 57 local document links, citation parsing, Ruff,
+  strict mypy, 54 tests, security audit, independent fixture benchmark, and dependency audit.

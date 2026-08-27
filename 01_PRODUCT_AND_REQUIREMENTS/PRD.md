@@ -1,15 +1,19 @@
 # Product Requirements Document
 
 ## Product
+
 Tross LinkedIn Profile API.
 
 ## User/job
+
 A developer/evaluator submits a LinkedIn member profile URL and needs a machine-readable profile response from direct reverse-engineered LinkedIn endpoints, with no runtime browser.
 
 ## Primary success
+
 One public HTTPS endpoint returns mandatory observable fields with documented schema, provenance, partial-result behavior, and honest live evaluation.
 
 ## MVP MUST
+
 - LinkedIn URL input
 - direct HTTP runtime
 - developer-owned secret session configuration
@@ -24,6 +28,7 @@ One public HTTPS endpoint returns mandatory observable fields with documented sc
 - public repo/README/API docs/limitations/no secrets
 
 ## SHOULD
+
 - background image
 - multilingual handling
 - grouped role fidelity
@@ -31,11 +36,13 @@ One public HTTPS endpoint returns mandatory observable fields with documented sc
 - PhantomBuster measured comparison
 
 ## COULD
+
 - volunteering/projects/publications/honors
 - short request coalescing
 - richer telemetry
 
 ## WON'T for challenge
+
 - email enrichment
 - persistent people database
 - browser runtime

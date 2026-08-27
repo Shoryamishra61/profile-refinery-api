@@ -18,12 +18,14 @@ evidence: controlled_network_observation
 ```
 
 ## Prohibited
+
 - historical route labeled live;
 - secret/credential in registry;
 - stability inferred from one observation;
 - silent identifier replacement.
 
 ## Drift lifecycle
+
 `live_verified -> suspect -> disabled -> reverified`
 
 Registry change requires evidence update + fixture + parser test + reason.

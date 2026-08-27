@@ -37,4 +37,3 @@ Errors use `application/problem+json` with RFC 9457-compatible `type`, `title`, 
 - `GET /readyz`: schema, registry, core operation, and session readiness.
 - `GET /openapi.json`: OpenAPI 3.1 contract.
 - `GET /docs`: Swagger UI for the API contract; this is documentation only, not an acquisition browser.
-

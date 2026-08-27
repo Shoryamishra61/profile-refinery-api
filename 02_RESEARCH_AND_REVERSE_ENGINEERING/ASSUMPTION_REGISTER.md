@@ -1,4 +1,5 @@
 # Assumption Register
+
 | ID | Assumption | Current status | Blocking | Evidence needed |
 |---|---|---|---|---|
 | A-01 | Current core profile works via direct HTTP with owned session | UNKNOWN | Yes | current capture + replay |

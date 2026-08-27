@@ -1,5 +1,7 @@
 # Source of Truth
+
 When materials disagree, use this order:
+
 1. Tross challenge + no-browser clarification
 2. current controlled live observation
 3. current official LinkedIn docs / LinkedIn Engineering
@@ -12,6 +14,7 @@ When materials disagree, use this order:
 10. generated research prose
 
 ## Current externally rechecked foundations
+
 - LinkedIn User Agreement effective 3 Nov 2025 prohibits scraping/copying profiles and bypassing access controls/use limits.
 - Current Profile API is restricted; its documentation says other-member Profile API data may not be stored.
 - `r_fullprofile` is currently closed.

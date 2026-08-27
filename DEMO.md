@@ -40,4 +40,3 @@ uv run tross-benchmark --json --iterations 10
 ```
 
 Explain that all metrics are fixture-only. A live/public demo must not be presented until `JUDGE_AUDIT.md` live and deployment gates change from BLOCKED to PASS with executable evidence.
-

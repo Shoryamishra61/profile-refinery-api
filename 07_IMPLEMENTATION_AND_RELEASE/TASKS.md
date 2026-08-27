@@ -1,6 +1,7 @@
 # Engineering Backlog
 
 ## P0 blockers
+
 - [ ] real package layout
 - [ ] pyproject/locked dependencies
 - [ ] env example + gitignore + secret scan
@@ -24,4 +25,5 @@
 - [ ] clean clone reproduction
 
 ## P1 quality
+
 structured logs, request IDs, bounded concurrency, partial orchestrator, multilingual/media tests, operation drift alerts, measured PhantomBuster comparison.

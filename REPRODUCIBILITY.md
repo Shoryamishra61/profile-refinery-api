@@ -36,4 +36,3 @@ Then check `/healthz`, `/readyz`, `/openapi.json`, missing/invalid auth, invalid
 ## Archive integrity
 
 `11_ARCHIVE_ORIGINALS/` is excluded from lint/runtime and preserved as supplied. Representative SHA-256 values remained equal to `PACKAGE_MANIFEST.json` during the build audit.
-

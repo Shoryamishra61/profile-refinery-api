@@ -1,9 +1,11 @@
 # Migration from Legacy Prototype
 
 ## Reuse carefully
+
 URL canonicalization idea, entity assembler patterns, normalization helpers, Problem Details model, logging-redaction tests, field ontology, fixture concepts.
 
 ## Rewrite
+
 - flat files -> real package;
 - fake session pool -> validated environment settings;
 - incomplete live GraphQL transport/resolver -> operation-registry-driven current payload;

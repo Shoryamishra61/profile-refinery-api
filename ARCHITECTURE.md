@@ -39,4 +39,3 @@ HTTPX uses pooling, a fixed origin, disabled redirects, explicit timeout, a stre
 ## Known runtime boundary
 
 All checked-in operations are synthetic fixture evidence. The direct HTTP adapter is contract-tested against mocked HTTP, not claimed as a current LinkedIn operation. Current live discovery is the remaining acquisition gate.
-
