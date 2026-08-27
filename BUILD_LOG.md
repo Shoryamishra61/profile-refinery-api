@@ -47,3 +47,6 @@
   Markdown files; `11_ARCHIVE_ORIGINALS/` remained untouched.
 - Verified zero Markdown lint findings, 57 local document links, citation parsing, Ruff,
   strict mypy, 54 tests, security audit, independent fixture benchmark, and dependency audit.
+- Published the cleaned documentation tree at public commit `8d916ab`. GitHub reported no
+  deployments; provider credential variables were absent; an `APP_MODE=live` preflight
+  failed closed on the missing LinkedIn session secrets as designed.

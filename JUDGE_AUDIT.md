@@ -27,9 +27,9 @@ The repository is a reproducible, secured, no-browser implementation with honest
 | Challenge fail closed | PASS as contract test | 403 and checkpoint handling; no live challenge claim |
 | Public HTTPS URL/evaluator request/restart | FAIL — external blocker | no deployment provider authentication; no URL claimed |
 | Health/readiness/OpenAPI/local evaluator call | PASS locally | API integration and process smoke test |
-| README and required technical documents | PASS | repository root documents |
+| README and required technical documents | PASS | research README; 56 maintained Markdown files lint clean; 57 local links resolve |
 | Docker image builds and serves API | PASS | image manifest `sha256:76f1e36d...`; container returned health and six-operation fixture profile |
-| Public GitHub repository | PARTIAL | public URL exists with full source/docs/tests; active workflow is mirrored as `.example` due OAuth scope |
+| Public GitHub repository | PARTIAL | cleaned public release `8d916ab`; active workflow is mirrored as `.example` due OAuth scope |
 
 ## Critical legacy defects
 
@@ -54,9 +54,10 @@ The repository is a reproducible, secured, no-browser implementation with honest
 ## External blockers with evidence
 
 1. Environment contained no `LINKEDIN_*`, `LI_AT`, `JSESSIONID`, or current query-ID variables. No authorized capture/profile matrix was supplied. Attempting guessed historical endpoints would violate project evidence policy.
-2. Railway, Fly, Wrangler, Zerops, and Render CLIs were absent; Hugging Face was not authenticated; no deployment-provider variables existed.
+2. Railway, Fly, Wrangler, Zerops, Render, and Vercel CLIs were absent; Hugging Face was not authenticated; no deployment-provider variables existed. GitHub's deployment API returned an empty deployment list.
 3. GitHub repository publication succeeded, but the OAuth token lacked `workflow` scope. GitHub rejected `.github/workflows/ci.yml`; no SSH key or connected browser was available to approve the device grant.
 4. Docker Desktop was initially stopped; it was started and the build/container smoke gate subsequently passed.
+5. A direct `APP_MODE=live` deployment preflight failed closed with the expected validation error for missing `LINKEDIN_LI_AT` and `LINKEDIN_JSESSIONID`; all checked-in operations remain fixture-verified rather than live-verified.
 
 ## Release decision
 
