@@ -1,41 +1,96 @@
-# Tross LinkedIn Profile API — Master Engineering Handoff
+# Tross LinkedIn Profile API
 
-This is the canonical build package for the **Tross LinkedIn Profile API hiring challenge**.
+A research-grade FastAPI service that turns a validated LinkedIn member URL into a stable, provenance-carrying JSON profile. The runtime has no browser, DOM, screenshot, CAPTCHA, proxy-rotation, or fingerprint-spoofing path. All upstream calls are direct HTTP requests to a fixed LinkedIn origin and must come from an evidence-gated operation registry.
 
-> Build a publicly hosted HTTPS API that accepts a LinkedIn profile URL and returns most profile-page information as structured JSON.
+## Current status
 
-## Mandatory Tross clarification
+The complete fixture/offline system is implemented and verified. The current registry entries are `FIXTURE_VERIFIED`, so live mode intentionally refuses to start. A current authorized network observation, direct replay, redacted fixture, and runtime secrets are still required before any operation can be relabeled `live_verified`. Public HTTPS deployment and controlled-live quality metrics therefore remain blocked; see [JUDGE_AUDIT.md](JUDGE_AUDIT.md).
 
-The deployed LinkedIn solution must be **purely reverse engineered, directly hit LinkedIn endpoints, and not use a browser**.
+The fixture API exercises name, headline, location, about, experience, education, skills, certifications, languages, media, provenance, partial results, request-count instrumentation, schema validation, and error behavior. It is not evidence that LinkedIn currently returns those fixture shapes.
 
-Production therefore contains **no Selenium, Playwright, Puppeteer, Chromium, headless/headful browser worker, DOM scraper, screenshot extractor, or browser fallback**. Manual DevTools/HAR inspection is permitted only as a controlled research instrument on an account/profile you are authorized to inspect.
+## Architecture
 
-## Why this package exists
+```text
+caller -> API-key/rate limit -> strict URL canonicalizer -> semantic operation registry
+       -> fixture or direct-HTTP transport -> deterministic parsers -> normalizer
+       -> partial-result engine -> Pydantic + JSON Schema 2020-12 -> response
+```
 
-The uploaded corpus is unusually strong in research breadth, protocol thinking, schema design, failure taxonomy, and competitive analysis. But several generated documents describe mock/hypothetical behavior as if it were live-proven. This package preserves every original artifact verbatim under `11_ARCHIVE_ORIGINALS/` and places a stricter source-of-truth layer above it.
+Volatile paths and query identifiers never appear in business logic. Live session values are loaded only from runtime secrets. A 401/403 or recognized checkpoint makes the session unavailable until manual operator action.
 
-### Read first
-1. `00_START_HERE/AGENTS.md`
-2. `00_START_HERE/MASTER_AUDIT.md`
-3. `01_PRODUCT_AND_REQUIREMENTS/REQUIREMENTS.md`
-4. `01_PRODUCT_AND_REQUIREMENTS/SRS.md`
-5. `02_RESEARCH_AND_REVERSE_ENGINEERING/REVERSE_ENGINEERING_PROTOCOL.md`
-6. `03_ARCHITECTURE_AND_DESIGN/SYSTEM_DESIGN.md`
-7. `06_TESTING_AND_EVALUATION/TEST_PLAN.md`
-8. `07_IMPLEMENTATION_AND_RELEASE/IMPLEMENTATION_PLAN.md`
-9. `07_IMPLEMENTATION_AND_RELEASE/DEFINITION_OF_DONE.md`
-10. `09_AGENT_PROMPTS/MASTER_BUILD_AGENT_PROMPT.md`
+## Fresh setup
 
-## Engineering thesis
+Requirements: Git, [uv](https://docs.astral.sh/uv/), and Python 3.12+.
 
-The winning submission should prove:
-- direct endpoint acquisition at runtime;
-- zero runtime browser dependencies;
-- current, evidence-backed operation registry;
-- stable nested public schema over volatile upstream representations;
-- explicit partial/unavailable states and provenance;
-- independent fixture and live benchmarks;
-- secure secret isolation;
-- public HTTPS reproducibility.
+PowerShell:
 
-Do **not** optimize for source-count, anti-detect tricks, or marketing-style performance claims. Optimize for executable evidence.
+```powershell
+git clone https://github.com/Shoryamishra61/tross-linkedin-profile-api.git
+Set-Location tross-linkedin-profile-api
+uv sync --extra dev --locked --python 3.12
+$env:APP_API_KEYS = uv run python -c "import secrets; print(secrets.token_urlsafe(32))"
+$env:APP_MODE = "fixture"
+uv run uvicorn tross_linkedin_api.main:app --host 127.0.0.1 --port 8000
+```
+
+Bash:
+
+```bash
+git clone https://github.com/Shoryamishra61/tross-linkedin-profile-api.git
+cd tross-linkedin-profile-api
+uv sync --extra dev --locked --python 3.12
+export APP_API_KEYS="$(uv run python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export APP_MODE=fixture
+uv run uvicorn tross_linkedin_api.main:app --host 127.0.0.1 --port 8000
+```
+
+In another shell, substitute the generated key:
+
+```bash
+curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8000/readyz
+curl -H "X-API-Key: YOUR_GENERATED_KEY" "http://127.0.0.1:8000/v1/profiles?url=https%3A%2F%2Fwww.linkedin.com%2Fin%2Fsynthetic-profile"
+```
+
+Interactive documentation is at `/docs`; OpenAPI 3.1 is at `/openapi.json`.
+
+## Verification
+
+```bash
+uv run ruff check src tests scripts
+uv run mypy
+uv run pytest
+uv run python scripts/security_audit.py
+uv run tross-benchmark --json --iterations 10
+uv run pip-audit
+```
+
+The expected benchmark output is independently authored in `tests/fixtures/expected/`; the evaluator never assigns extractor output to ground truth.
+
+## Live-mode activation
+
+Do not turn on live mode by copying historical routes. Follow [REVERSE_ENGINEERING_METHOD.md](REVERSE_ENGINEERING_METHOD.md) with an owned/authorized account, then for each operation:
+
+1. capture only redacted request semantics;
+2. replay the operation through direct HTTP without bypass behavior;
+3. add the redacted fixture and parser contract tests;
+4. set a current `observed_at`, evidence reference, and `live_verified` status;
+5. inject `LINKEDIN_LI_AT`, `LINKEDIN_JSESSIONID`, and current query identifiers outside Git;
+6. set `APP_MODE=live`.
+
+The registry rejects fixture/historical operations in live mode and rejects enabled live GraphQL operations whose identifier environment value is missing.
+
+## Documents
+
+- [Architecture](ARCHITECTURE.md)
+- [API reference](API_REFERENCE.md)
+- [Reverse-engineering method](REVERSE_ENGINEERING_METHOD.md)
+- [Results](RESULTS.md) and [limitations](LIMITATIONS.md)
+- [Security](SECURITY.md) and [privacy/platform risk](PRIVACY_AND_PLATFORM_NOTES.md)
+- [Reproducibility](REPRODUCIBILITY.md)
+- [PhantomBuster comparison](PHANTOMBUSTER_COMPARISON.md)
+- [Build log](BUILD_LOG.md), [failure log](FAILURE_LOG.md), and [assumptions](ASSUMPTION_REGISTER.md)
+- [Judge audit](JUDGE_AUDIT.md) and [demo](DEMO.md)
+
+Historical materials are preserved unchanged under `11_ARCHIVE_ORIGINALS/` and are not production truth.
+

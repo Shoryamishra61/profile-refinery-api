@@ -1,0 +1,14 @@
+{
+  "included": [
+    {
+      "$type": "com.linkedin.voyager.dash.identity.Education",
+      "entityUrn": "urn:li:fsd_profileEducation:SYNTHETIC-E1",
+      "schoolName": "Example Institute of Technology",
+      "schoolUrn": "urn:li:fsd_school:200",
+      "degreeName": "Bachelor of Technology",
+      "fieldOfStudy": "Computer Science",
+      "timePeriod": {"startDate": {"year": 2016}, "endDate": {"year": 2020}}
+    }
+  ]
+}
+

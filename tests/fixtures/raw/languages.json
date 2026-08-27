@@ -1,0 +1,5 @@
+{"included": [
+  {"$type": "com.linkedin.voyager.dash.identity.Language", "entityUrn": "urn:li:fsd_profileLanguage:L1", "name": "English", "proficiency": "FULL_PROFESSIONAL"},
+  {"$type": "com.linkedin.voyager.dash.identity.Language", "entityUrn": "urn:li:fsd_profileLanguage:L2", "name": "Hindi"}
+]}
+

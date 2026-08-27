@@ -1,0 +1,22 @@
+{
+  "included": [
+    {"$type": "com.linkedin.voyager.dash.entities.Company", "entityUrn": "urn:li:fsd_company:100", "name": "Synthetic Systems Ltd"},
+    {
+      "$type": "com.linkedin.voyager.dash.identity.Position",
+      "entityUrn": "urn:li:fsd_profilePosition:SYNTHETIC-P1",
+      "title": "Principal Engineer",
+      "*company": "urn:li:fsd_company:100",
+      "timePeriod": {"startDate": {"year": 2023, "month": 4}},
+      "locationName": "Bengaluru, India",
+      "description": "Designed resilient ingestion services."
+    },
+    {
+      "$type": "com.linkedin.voyager.dash.identity.Position",
+      "entityUrn": "urn:li:fsd_profilePosition:SYNTHETIC-P2",
+      "title": "Software Engineer",
+      "companyName": "Example Research Lab",
+      "timePeriod": {"startDate": {"year": 2020, "month": 6}, "endDate": {"year": 2023, "month": 3}}
+    }
+  ]
+}
+

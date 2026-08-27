@@ -1,0 +1,5 @@
+{"included": [
+  {"$type": "com.linkedin.voyager.dash.identity.Skill", "entityUrn": "urn:li:fsd_profileSkill:S1", "name": "Python"},
+  {"$type": "com.linkedin.voyager.dash.identity.Skill", "entityUrn": "urn:li:fsd_profileSkill:S2", "name": "Distributed Systems"}
+]}
+

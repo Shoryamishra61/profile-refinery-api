@@ -1,0 +1,4 @@
+{"included": [
+  {"$type": "com.linkedin.voyager.dash.identity.Certification", "entityUrn": "urn:li:fsd_profileCertification:C1", "name": "Cloud Architecture", "authority": "Example Standards Board", "licenseNumber": "SYNTHETIC-42", "timePeriod": {"startDate": {"year": 2024, "month": 1}}}
+]}
+
