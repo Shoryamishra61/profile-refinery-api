@@ -202,12 +202,12 @@ async def test_page_fallback_extracts_embedded_json(monkeypatch) -> None:
 
 
 @respx.mock
-async def test_page_bot_wall_999_is_challenge(monkeypatch) -> None:
+async def test_page_bot_wall_999_is_challenge_session_survives(monkeypatch) -> None:
     _, _, session, transport = live_components(monkeypatch)
     respx.get("https://www.linkedin.com/in/some-person/").mock(return_value=Response(999))
     with pytest.raises(UpstreamChallenge):
         await transport.execute("profile_page", "some-person", "req-1")
-    assert session.available is False
+    assert session.available is True
     await transport.aclose()
 
 
@@ -224,7 +224,7 @@ async def test_authwall_redirect_is_session_expired(monkeypatch) -> None:
 
 
 @respx.mock
-async def test_same_url_redirect_is_challenge(monkeypatch) -> None:
+async def test_same_url_redirect_is_challenge_session_survives(monkeypatch) -> None:
     _, _, session, transport = live_components(monkeypatch)
     route = respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
         return_value=Response(302, headers={"location": f"https://www.linkedin.com{DASH_PATH}?q=memberIdentity"})
@@ -232,5 +232,7 @@ async def test_same_url_redirect_is_challenge(monkeypatch) -> None:
     with pytest.raises(UpstreamChallenge):
         await transport.execute("profile_view", "some-person", "req-1")
     assert route.call_count == 1  # single attempt; retry policy lives in the governor
-    assert session.available is False
+    # Transient challenges are breaker events: the session stays configured
+    # so the cooldown probe can restore extraction automatically.
+    assert session.available is True
     await transport.aclose()

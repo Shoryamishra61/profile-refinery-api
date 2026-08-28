@@ -250,13 +250,16 @@ class LinkedInTransport:
                 self.call_count += 1
                 duration = (time.perf_counter() - started) * 1000
                 if response.is_redirect:
-                    # Authwall/login redirects mean the li_at session is dead.
+                    # Authwall/login redirects mean the li_at session is dead:
+                    # that is a permanent state, so the session is invalidated.
                     location = response.headers.get("location", "")
                     if "authwall" in location or "login" in location:
                         self._session.fail_closed()
                         raise UpstreamAuthExpired()
-                    # A same-URL redirect is LinkedIn's soft-challenge signal.
-                    self._session.fail_closed()
+                    # A same-URL redirect is LinkedIn's soft-challenge signal:
+                    # transient, so the circuit breaker owns recovery. The
+                    # session itself stays configured and the breaker's
+                    # cooldown probe will restore extraction automatically.
                     raise UpstreamChallenge()
                 if response.status_code != 404:
                     self._classify_status(response, operation.semantic_name)
@@ -275,7 +278,7 @@ class LinkedInTransport:
                     if media_type == "text/html":
                         lowered = raw[:4096].lower()
                         if b"checkpoint" in lowered or b"challenge" in lowered:
-                            self._session.fail_closed()
+                            # Transient challenge: breaker owns recovery.
                             raise UpstreamChallenge()
                     # A retired decoration answers with an HTML error page.
                     return None, UpstreamOperationDrift(
@@ -366,22 +369,21 @@ class LinkedInTransport:
         )
 
     def _classify_page_status(self, response: httpx.Response, operation: str) -> None:
+        # Challenges (999 bot wall, 403, same-URL redirects) are transient:
+        # the circuit breaker owns their recovery. Only authwall redirects and
+        # 401s invalidate the session itself.
         if response.is_redirect:
             location = response.headers.get("location", "")
             if "authwall" in location or "login" in location:
                 self._session.fail_closed()
                 raise UpstreamAuthExpired()
-            # A same-URL redirect is the soft-challenge signal.
-            self._session.fail_closed()
             raise UpstreamChallenge()
         if response.status_code == 999:
-            self._session.fail_closed()
             raise UpstreamChallenge()
         if response.status_code == 401:
             self._session.fail_closed()
             raise UpstreamAuthExpired()
         if response.status_code == 403:
-            self._session.fail_closed()
             raise UpstreamChallenge()
         if response.status_code == 404:
             raise ProfileNotFound()

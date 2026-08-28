@@ -285,3 +285,33 @@ async def test_rate_budget_throttles_burst(tmp_path: Any) -> None:
     # 8 requests at 2/s with capacity 2 ⇒ at least ~3s of pure pacing.
     assert elapsed >= 2.5, f"rate budget did not throttle: {elapsed:.2f}s for 8 requests"
     await runtime.aclose()
+
+
+@pytest.mark.asyncio
+async def test_challenge_breaker_recovery_keeps_session_configured(tmp_path: Any) -> None:
+    """A challenge pauses extraction (breaker OPEN) without destroying the
+    configured session; after cooldown the probe restores extraction."""
+    upstream = FakeUpstream(mode="challenge")
+    settings = build_settings(tmp_path, app_breaker_failure_threshold=1, app_breaker_cooldown_seconds=0.1)
+    runtime = Runtime(settings, transport=upstream)
+    assert runtime.session.available is True
+    app = create_app(runtime=runtime)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://t"
+    ) as client:
+        created = await client.post("/v1/batches", params={"text": slugs(2)}, headers=AUTH)
+        batch_id = created.json()["batch_id"]
+        await client.get(f"/v1/batches/{batch_id}", params={"wait_seconds": 2}, headers=AUTH)
+        assert runtime.governor.breaker.state.value == "OPEN"
+        assert runtime.session.available is True, "challenge must not kill the session"
+        assert runtime.extraction_capability()["state"] == "OPEN"
+
+        upstream.mode = "ok"
+        await asyncio.sleep(0.2)
+        final = await client.get(
+            f"/v1/batches/{batch_id}", params={"wait_seconds": 10}, headers=AUTH
+        )
+        assert final.json()["statistics"]["succeeded"] == 2
+        assert runtime.governor.breaker.state.value == "CLOSED"
+        assert runtime.extraction_capability()["state"] == "CLOSED"
+    await runtime.aclose()
