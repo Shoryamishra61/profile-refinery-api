@@ -200,6 +200,39 @@ limitation with a named upgrade path (managed KV behind `JournalStore`).
 | restart safety | 0 re-extractions of completed jobs | `test_durable_jobs_survive_restart` |
 | 30-profile acceptance | see `FINAL_VERIFICATION.md` | paced production run |
 
+## 11b. Field coverage matrix
+
+Every Tross-required field, its source operation, and verification status:
+
+| Field | Source | Raw path (dash) | Status |
+|---|---|---|---|
+| name (first/last/full) | `profile_view` (live-verified) | `Profile.firstName/lastName` (plain or localized) | verified live (real payload) |
+| headline | `profile_view` (live-verified) | `Profile.headline` | verified live |
+| location | `profile_view` (live-verified) | `Profile.locationName` / `geoLocationName` | verified live (null when member hides it — null semantics) |
+| about | `profile_view` (live-verified) | `Profile.summary` | verified live (Bill Gates summary captured) |
+| profile image | `profile_view` (live-verified) | `Profile.profilePicture.displayImage.vectorImage` artifacts | verified live (CDN url constructed, expiresAt kept) |
+| background image | `profile_view` (live-verified) | `Profile.backgroundPicture(s)` | implemented; present only when member uploaded one |
+| public identifier / member URN | `profile_view` (live-verified) | `Profile.publicIdentifier`, `entityUrn` | verified live |
+| experience | `profile_view_full` decoration, else `profile_sections` card `…-EXPERIENCE-…` | `Position` entities (+ `Company` for url) | implemented, shape-tested; live verification pending session window |
+| education | same as experience | `Education` entities | implemented, shape-tested |
+| skills | same as experience | `Skill` entities (ordering preserved) | implemented, shape-tested |
+| certifications | same as experience | `Certification` (+ `Organization` authority) | implemented, shape-tested |
+| languages | same as experience | `Language` entities (proficiency) | implemented, shape-tested |
+
+Sections that the viewer cannot see return `status: not_provided` with empty
+value — never fabricated.
+
+## 11c. SLOs (what the application controls)
+
+| SLO | Target | Notes |
+|---|---|---|
+| Ingestion availability (`/healthz`, batch create) | 99.9% | independent of LinkedIn (bulkhead) |
+| Batch creation latency | < 500 ms p95 for 30 URLs | parsing + discovery are local |
+| Job durability | 100% — no job lost across warm restart | journal + deterministic ids (test-proven) |
+| Export availability | 100% once any job terminal | exports served from journal |
+| Normalization success rate | ≥ 98% of successful upstream fetches | shape-tested parsers; drift ⇒ explicit 502 |
+| Upstream latency per profile | external dependency — measured and reported, not promised | p50/p95 published per acceptance run |
+
 ## 12. Tradeoffs
 
 * Conservative pacing lengthens batch wall clock (minutes, not seconds) — chosen
