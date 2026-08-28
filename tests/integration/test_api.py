@@ -75,6 +75,9 @@ async def test_error_responses_carry_request_id(client: httpx.AsyncClient) -> No
     )
     assert response.status_code == 400
     assert response.json()["request_id"] == "corr-42"
+    # Regression: the enriched body must agree with its Content-Length header
+    # (a mismatch crashes uvicorn with "content longer than Content-Length").
+    assert int(response.headers["content-length"]) == len(response.content)
 
 
 @pytest.mark.asyncio

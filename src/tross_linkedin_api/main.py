@@ -50,12 +50,14 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
         # Correlation: every problem response carries the caller-visible request id.
         request_id = getattr(request.state, "tross_request_id", None)
         if request_id:
-            raw_body = response.body
-            body = json.loads(bytes(raw_body))
+            body = json.loads(bytes(response.body))
             body["request_id"] = request_id
-            return JSONResponse(
-                body, status_code=response.status_code, headers=dict(response.headers)
-            )
+            headers = {
+                k: v
+                for k, v in response.headers.items()
+                if k.lower() != "content-length"  # body grew; let the frame recompute it
+            }
+            return JSONResponse(body, status_code=response.status_code, headers=headers)
         return response
 
     @application.exception_handler(ValueError)
