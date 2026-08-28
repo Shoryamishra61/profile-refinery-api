@@ -63,6 +63,36 @@ class UpstreamFailure(ProblemError):
     pass
 
 
+class UpstreamAuthRequired(UpstreamFailure):
+    def __init__(self) -> None:
+        super().__init__(
+            503,
+            "UPSTREAM_AUTH_REQUIRED",
+            "Upstream authentication required",
+            "Live extraction is unavailable until an authorized LinkedIn session is configured.",
+        )
+
+
+class UpstreamOperationUnavailable(UpstreamFailure):
+    def __init__(self) -> None:
+        super().__init__(
+            503,
+            "UPSTREAM_OPERATION_UNAVAILABLE",
+            "Live operation unavailable",
+            "No current live-verified core profile operation is configured.",
+        )
+
+
+class LiveFixtureLeakDetected(UpstreamFailure):
+    def __init__(self) -> None:
+        super().__init__(
+            502,
+            "LIVE_FIXTURE_LEAK_DETECTED",
+            "Live response rejected",
+            "The service refused a live response containing fixture-only sentinel data.",
+        )
+
+
 class UpstreamAuthExpired(UpstreamFailure):
     def __init__(self) -> None:
         super().__init__(

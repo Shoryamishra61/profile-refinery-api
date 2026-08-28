@@ -5,10 +5,12 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Security
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import APIKeyHeader
 
 from .canonicalizer import canonicalize_profile_url
+from .config import AppMode
+from .demo import DEMO_HTML
 from .errors import CallerRateLimited, ProblemError, UnauthorizedCaller
 from .models import ProfileResponse
 from .rate_limit import SlidingWindowLimiter
@@ -23,6 +25,19 @@ def build_router(runtime: Runtime) -> APIRouter:
         runtime.settings.app_rate_limit_requests,
         runtime.settings.app_rate_limit_window_seconds,
     )
+
+    @router.get("/", include_in_schema=False)
+    async def root() -> RedirectResponse:
+        return RedirectResponse(
+            url="/demo" if runtime.settings.app_mode is AppMode.FIXTURE else "/docs"
+        )
+
+    if runtime.settings.app_mode is AppMode.FIXTURE:
+
+        @router.get("/demo", include_in_schema=False)
+        async def demo() -> HTMLResponse:
+            return HTMLResponse(content=DEMO_HTML)
+
 
     @router.get("/healthz", tags=["operations"])
     async def health() -> dict[str, str]:
@@ -61,6 +76,7 @@ def build_router(runtime: Runtime) -> APIRouter:
         if retry_after is not None:
             raise CallerRateLimited(retry_after)
         canonical = canonicalize_profile_url(url)
+        runtime.ensure_profile_available()
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         return await runtime.orchestrator.fetch(canonical, request_id)
 

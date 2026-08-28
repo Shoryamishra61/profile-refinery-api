@@ -1,0 +1,17 @@
+{
+  "services": {
+    "tross-linkedin-profile-api": {
+      "root": ".",
+      "entrypoint": "src.tross_linkedin_api.main:app"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "tross-linkedin-profile-api"
+      }
+    }
+  ]
+}

@@ -13,6 +13,15 @@ async def test_health_and_readiness_are_public(client: httpx.AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
+async def test_fixture_demo_never_embeds_the_caller_api_key(client: httpx.AsyncClient) -> None:
+    response = await client.get("/demo")
+    assert response.status_code == 200
+    assert "Verified Fixture Demo" in response.text
+    assert "test-api-key" not in response.text
+    assert "Bearer token" not in response.text
+
+
+@pytest.mark.asyncio
 async def test_missing_and_invalid_api_keys_are_401(client: httpx.AsyncClient) -> None:
     params = {"url": "https://www.linkedin.com/in/synthetic-profile"}
     missing = await client.get("/v1/profiles", params=params)
@@ -34,12 +43,22 @@ async def test_fixture_profile_contract_and_instrumentation(client: httpx.AsyncC
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["canonical_url"] == "https://www.linkedin.com/in/synthetic-profile"
+    assert body["retrieval"] == {
+        "mode": "fixture",
+        "source": "synthetic_fixture",
+        "fixture": True,
+        "requested_url": "https://linkedin.com/in/synthetic-profile?trk=example",
+        "canonical_url": "https://www.linkedin.com/in/synthetic-profile",
+        "observed_at": body["observed_at"],
+        "partial": False,
+    }
     assert body["profile"]["name"]["value"] == "Avery Raman"
     assert len(body["profile"]["experience"]["value"]) == 2
     assert body["profile"]["background_image"]["status"] == "not_provided"
     assert body["partial"] is False
     assert body["meta"]["upstream_calls"] == 6
     assert len(body["meta"]["operations_succeeded"]) == 6
+    assert body["meta"]["viewer_context"] == "synthetic_fixture"
 
 
 @pytest.mark.asyncio

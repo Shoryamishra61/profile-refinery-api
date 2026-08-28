@@ -4,7 +4,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import BeforeValidator, Field, SecretStr, model_validator
+from pydantic import BeforeValidator, Field, SecretStr
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -42,18 +42,6 @@ class Settings(BaseSettings):
     app_upstream_retries: int = Field(default=1, ge=0, le=2)
     linkedin_li_at: SecretStr | None = None
     linkedin_jsessionid: SecretStr | None = None
-
-    @model_validator(mode="after")
-    def validate_mode_requirements(self) -> Settings:
-        if self.app_mode is AppMode.LIVE:
-            missing = []
-            if not self.linkedin_li_at or not self.linkedin_li_at.get_secret_value():
-                missing.append("LINKEDIN_LI_AT")
-            if not self.linkedin_jsessionid or not self.linkedin_jsessionid.get_secret_value():
-                missing.append("LINKEDIN_JSESSIONID")
-            if missing:
-                raise ValueError(f"live mode requires runtime secrets: {', '.join(missing)}")
-        return self
 
     @property
     def api_key_values(self) -> tuple[str, ...]:

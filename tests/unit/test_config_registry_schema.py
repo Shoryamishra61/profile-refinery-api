@@ -10,9 +10,10 @@ from tross_linkedin_api.operation_registry import OperationRegistry
 from tross_linkedin_api.validation import SchemaValidator
 
 
-def test_live_mode_requires_runtime_session_secrets() -> None:
-    with pytest.raises(ValidationError, match="LINKEDIN_LI_AT"):
-        Settings(app_api_keys=["caller"], app_mode="live")
+def test_live_mode_can_start_degraded_without_runtime_session_secrets() -> None:
+    settings = Settings(app_api_keys=["caller"], app_mode="live")
+    assert settings.linkedin_li_at is None
+    assert settings.linkedin_jsessionid is None
 
 
 def test_api_keys_are_required() -> None:
@@ -30,9 +31,11 @@ def test_registry_missing_fails_closed(tmp_path: Path) -> None:
         OperationRegistry.load(tmp_path / "missing.yaml", AppMode.FIXTURE)
 
 
-def test_fixture_registry_cannot_start_live() -> None:
-    with pytest.raises(ValueError, match="invalid evidence"):
-        OperationRegistry.load(Path("config/operation_registry.yaml"), AppMode.LIVE)
+def test_fixture_registry_has_no_active_operations_in_live_mode() -> None:
+    registry = OperationRegistry.load(Path("config/operation_registry.yaml"), AppMode.LIVE)
+    assert registry.enabled_names() == []
+    with pytest.raises(ValueError, match="unavailable in the active evidence mode"):
+        registry.get("profile_core")
 
 
 def test_registry_rejects_unsafe_path(tmp_path: Path) -> None:

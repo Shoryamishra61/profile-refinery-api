@@ -58,6 +58,7 @@ class OperationRegistry:
     def __init__(self, document: RegistryDocument, mode: AppMode) -> None:
         self.version = document.version
         self._operations = {operation.semantic_name: operation for operation in document.operations}
+        self._active_names: set[str] = set()
         if len(self._operations) != len(document.operations):
             raise ValueError("operation registry contains duplicate semantic names")
         for operation in document.operations:
@@ -69,9 +70,7 @@ class OperationRegistry:
                 else operation.evidence_status is EvidenceStatus.FIXTURE_VERIFIED
             )
             if not allowed:
-                raise ValueError(
-                    f"{operation.semantic_name}: enabled operation has invalid evidence for {mode}"
-                )
+                continue
             if not operation.observed_at or not operation.fixture:
                 raise ValueError(
                     f"{operation.semantic_name}: enabled operation lacks observation metadata"
@@ -82,6 +81,7 @@ class OperationRegistry:
                 and not os.getenv(operation.query_id_env)
             ):
                 raise ValueError(f"{operation.semantic_name}: missing {operation.query_id_env}")
+            self._active_names.add(operation.semantic_name)
 
     @classmethod
     def load(cls, path: Path, mode: AppMode) -> OperationRegistry:
@@ -99,9 +99,9 @@ class OperationRegistry:
             operation = self._operations[semantic_name]
         except KeyError as exc:
             raise KeyError(f"unregistered operation: {semantic_name}") from exc
-        if not operation.enabled:
-            raise ValueError(f"operation is disabled: {semantic_name}")
+        if semantic_name not in self._active_names:
+            raise ValueError(f"operation is unavailable in the active evidence mode: {semantic_name}")
         return operation
 
     def enabled_names(self) -> list[str]:
-        return [name for name, operation in self._operations.items() if operation.enabled]
+        return [name for name in self._operations if name in self._active_names]

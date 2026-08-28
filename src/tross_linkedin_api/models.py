@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -120,12 +120,23 @@ class ResponseMeta(StrictModel):
     warnings: list[str]
 
 
+class Retrieval(StrictModel):
+    mode: Literal["fixture", "live"]
+    source: Literal["synthetic_fixture", "linkedin"]
+    fixture: bool
+    requested_url: str
+    canonical_url: str
+    observed_at: datetime
+    partial: bool
+
+
 class ProfileResponse(StrictModel):
     schema_version: str = "1.0.0"
     input_url: str
     canonical_url: str
     observed_at: datetime
     partial: bool
+    retrieval: Retrieval
     profile: Profile
     meta: ResponseMeta
 

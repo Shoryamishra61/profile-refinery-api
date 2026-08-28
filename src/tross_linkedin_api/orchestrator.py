@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime
 
 from .canonicalizer import CanonicalProfile
-from .errors import UpstreamOperationDrift
-from .models import FieldStatus, ProfileResponse, ResponseMeta
+from .config import AppMode
+from .errors import LiveFixtureLeakDetected, UpstreamOperationDrift
+from .models import FieldStatus, ProfileResponse, ResponseMeta, Retrieval
 from .normalizer import normalize_profile
 from .operation_registry import OperationRegistry
 from .parsers import parse
@@ -13,15 +15,26 @@ from .transport import Transport
 from .validation import SchemaValidator
 
 SECTION_OPERATIONS = ("experience", "education", "skills", "certifications", "languages")
+LIVE_FIXTURE_SENTINELS = (
+    "SYNTHETIC-001",
+    "Synthetic Systems Ltd",
+    "Example Research Lab",
+    "Example Institute of Technology",
+)
 
 
 class ProfileOrchestrator:
     def __init__(
-        self, registry: OperationRegistry, transport: Transport, validator: SchemaValidator
+        self,
+        registry: OperationRegistry,
+        transport: Transport,
+        validator: SchemaValidator,
+        mode: AppMode,
     ) -> None:
         self._registry = registry
         self._transport = transport
         self._validator = validator
+        self._mode = mode
 
     async def fetch(
         self, canonical: CanonicalProfile, request_id: str, observed_at: datetime | None = None
@@ -73,9 +86,24 @@ class ProfileOrchestrator:
             canonical_url=canonical.canonical_url,
             observed_at=timestamp,
             partial=bool(failures),
+            retrieval=Retrieval(
+                mode=self._mode.value,
+                source="synthetic_fixture"
+                if self._mode is AppMode.FIXTURE
+                else "linkedin",
+                fixture=self._mode is AppMode.FIXTURE,
+                requested_url=canonical.input_url,
+                canonical_url=canonical.canonical_url,
+                observed_at=timestamp,
+                partial=bool(failures),
+            ),
             profile=profile,
             meta=ResponseMeta(
-                viewer_context="authenticated_backend_member",
+                viewer_context=(
+                    "synthetic_fixture"
+                    if self._mode is AppMode.FIXTURE
+                    else "authenticated_backend_member"
+                ),
                 operations_attempted=attempted,
                 operations_succeeded=succeeded,
                 upstream_calls=calls,
@@ -84,6 +112,10 @@ class ProfileOrchestrator:
             ),
         )
         serialized = response.model_dump(mode="json")
+        if self._mode is AppMode.LIVE:
+            serialized_text = json.dumps(serialized, ensure_ascii=False).casefold()
+            if any(sentinel.casefold() in serialized_text for sentinel in LIVE_FIXTURE_SENTINELS):
+                raise LiveFixtureLeakDetected()
         self._validator.validate(serialized)
         return response
 
