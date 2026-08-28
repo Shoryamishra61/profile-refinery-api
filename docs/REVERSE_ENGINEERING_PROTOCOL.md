@@ -19,6 +19,8 @@ reference for the entries in `config/operation_registry.yaml`.
 | 9 | Unauthenticated page requests are refused with status `999` even with a full browser header set over HTTP/2 | probe | 999 classifies as `UPSTREAM_CHALLENGE`; no evasion is attempted |
 | 10 | `GET /voyager/api/me` returns the session owner's identity (200 JSON) — used as a session liveness check | probe | documented as an operator diagnostic |
 
+| 11 | **Client fingerprinting**: with a freshly logged-in session, the first scripted voyager request succeeds; subsequent scripted requests from the same client answer the soft-challenge 302 regardless of pacing (10-minute pauses included), fresh `JSESSIONID`, or full companion-cookie context. The same session keeps working in a real browser | live observation, 2026-08-28/29 | the breaker treats challenges as capacity events; overcoming fingerprinting would require mimicking a browser TLS stack or automating logins — both rejected as evasion. Extraction is verified within usable windows and fails closed otherwise |
+
 ## Current protocol model
 
 ```text
