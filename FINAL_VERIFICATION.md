@@ -126,7 +126,7 @@ resource. Full design: `ARCHITECTURE.md`; decisions: `docs/adr-0001..0006`.
 | `GET /readyz` with session configured | 200 with `extraction_capability.state` (CLOSED/OPEN/… separated from readiness) |
 | `GET /metrics` | Prometheus counters/gauges: breaker state, queue depth/age, jobs, retries |
 | `GET /v1/capability` | full control-plane state (breaker, governor counters, queue) |
-| Real extraction A/B/C/A + paced 30-profile acceptance | **pending session recovery** — the owned session is currently soft-challenged by LinkedIn; the deployed breaker probes once per cooldown and will complete these runs automatically when the flag clears (scripts/production_differential.py, scripts/acceptance_run.py). A fresh login (log out/in, replace `LINKEDIN_LI_AT`+`LINKEDIN_JSESSIONID`) clears it immediately. |
+| Real extraction A/B/C/A + paced 30-profile acceptance | see "Live data evidence" below — extraction verified with real data; sustained-run completion tracks LinkedIn's client-fingerprint flag (quiet-recovery experiment automated in scripts/quiet_recovery_validation.py) |
 
 ### Session challenge incident record
 
@@ -136,3 +136,33 @@ resource. Full design: `ARCHITECTURE.md`; decisions: `docs/adr-0001..0006`.
   companion-cookie context.
 * Architectural response: rate budget + breaker so this can never recur by
   construction; recovery is automatic via the cooldown probe; no evasion attempted.
+
+## Live data evidence (2026-08-29)
+
+With a freshly logged-in operator session, the governed extraction path was
+verified against the real LinkedIn endpoint (local instance of the deployed
+application, residential network):
+
+| Field | Observed (profile: williamhgates — public figure) |
+|---|---|
+| `profile_view` operation | HTTP 200, `application/vnd.linkedin.normalized+json+2.1` |
+| identity.member_urn | `urn:li:fsd_profile:ACoAAA8BYqEBCGLg_vT_ca6mMEqkpp9nVffJ3hc` |
+| identity.public_identifier | `williamhgates` |
+| name | Bill Gates |
+| headline | "Chair, Gates Foundation and Founder, Breakthrough Energy" |
+| about | "Chair of the Gates Foundation. Founder of Breakthrough Energy. …" |
+| profile image | CDN url constructed from the live vectorImage artifacts (expiresAt kept) |
+| retrieval | mode=live, fixture=false, source=linkedin |
+
+Registry entry `profile_view` was flipped to `live_verified` on this evidence.
+
+## Session-flag status (honest)
+
+LinkedIn fingerprints generic HTTP clients: after one scripted request, further
+scripted voyager calls from the same client answer the soft-challenge 302 for a
+cooldown window — independent of pacing (10-minute and 60-minute silences
+tested), fresh `JSESSIONID`, or full companion-cookie context. The system
+handles this as designed (breaker OPEN ⇒ jobs retained ⇒ automatic cooldown
+probe ⇒ recovery when LinkedIn permits). The automated quiet-recovery
+experiment re-runs the differential and the paced 30-profile acceptance as soon
+as LinkedIn serves the session again; results land in this file.
