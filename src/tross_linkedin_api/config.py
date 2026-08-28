@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     app_batch_time_budget_seconds: float = Field(default=8.0, gt=0, le=30)
     linkedin_li_at: SecretStr | None = None
     linkedin_jsessionid: SecretStr | None = None
+    # Optional full session context in raw `Cookie:` header form
+    # ("name=value; name=value"). Supplements li_at/JSESSIONID with the
+    # companion cookies a real browser session carries.
+    linkedin_cookie: SecretStr | None = None
     linkedin_user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"

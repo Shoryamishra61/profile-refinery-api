@@ -122,18 +122,27 @@ fails the build if a browser-automation term appears in production files).
 ## LinkedIn endpoint strategy
 
 Full evidence trail: `docs/REVERSE_ENGINEERING_PROTOCOL.md`.
-Verified experimentally on 2026-08-28 against the real service:
+Verified experimentally on 2026-08-28 against the real service (full evidence:
+`docs/REVERSE_ENGINEERING_PROTOCOL.md`):
 
 1. The `/voyager/api` surface enforces a `csrf-token` header equal to the `JSESSIONID`
-   cookie (anonymous probe: `403 CSRF check failed.` without it).
-2. The classic `identity/profiles/{slug}/profileView` resource is retired (HTTP 410).
-3. The current resource is the **dash profileView**:
-   `GET /voyager/api/identity/dash/profileView?q=memberIdentity&memberIdentity={slug}&decorationId=...`
-   returning one entity graph with all profile sections.
-4. Decoration ids (server-side template revisions) rotate; retired ones answer 404
-   HTML. The transport therefore tries a configured candidate list in order and falls
-   back to the authenticated profile page itself (still pure HTTP), extracting the
-   embedded Voyager JSON from `<code><!--{...}--></code>` blocks.
+   cookie (probe: `403 CSRF check failed.` without it).
+2. The classic `identity/profiles/{slug}/profileView` resource is retired (HTTP 410),
+   and the intermediate `identity/dash/profileView` resource is gone entirely
+   (404 for every decoration id).
+3. The live member finder is the **dash profiles collection resource**:
+   `GET /voyager/api/identity/dash/profiles?q=memberIdentity&memberIdentity={slug}`
+   — observed 200 JSON (`urn:li:collectionResponse` envelope with an `included`
+   entity graph) for an authenticated session.
+4. LinkedIn rotates session cookies server-side, so the transport keeps a persistent
+   cookie jar (seeded with `li_at`/`JSESSIONID`) and derives the CSRF header from the
+   jar's current `JSESSIONID` on every request.
+5. Bursty scripted volume triggers a same-URL 302 soft challenge (cookies-cleared).
+   The transport retries once with the refreshed jar and then fails closed with
+   `UPSTREAM_CHALLENGE` — it never loops and never evades; the fix is slower pacing.
+6. If the Rest.li contract drifts, the transport falls back to the authenticated
+   profile page itself (still pure HTTP), extracting embedded Voyager JSON from
+   `<code><!--{...}--></code>` blocks.
 
 ## Authentication / session setup
 

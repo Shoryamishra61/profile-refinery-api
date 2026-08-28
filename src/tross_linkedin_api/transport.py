@@ -151,6 +151,12 @@ class LinkedInTransport:
             self._client.cookies.set(
                 "JSESSIONID", f'"{seeded.jsessionid}"', domain=".www.linkedin.com"
             )
+            extra = self._settings.linkedin_cookie
+            if extra:
+                for pair in extra.get_secret_value().split(";"):
+                    name, _, value = pair.strip().partition("=")
+                    if name and value and name not in ("li_at", "JSESSIONID"):
+                        self._client.cookies.set(name.strip(), value.strip(), domain=".linkedin.com")
         self.call_count = 0
 
     def _csrf_token(self) -> str:
