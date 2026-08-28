@@ -19,14 +19,15 @@ automation, and never falls back to synthetic data.
 |---|---|
 | Public HTTPS deployment | Deployed on Vercel, verified |
 | Direct HTTP LinkedIn transport (Rest.li dash API + page fallback) | Implemented, contract-tested, protocol verified |
-| Real profile extraction (profile A → data A) | **Blocked on one external input: a valid `LINKEDIN_LI_AT` session cookie** (see below) |
+| Real profile extraction (profile A → data A) | **Verified with real data** (live-verified operation; real member payload captured). Sustained throughput is throttled by LinkedIn's client fingerprinting — see Limitations #2 |
 | Batch ingestion (text / CSV / XLSX / TXT / JSON / DOCX / PDF) | Implemented and verified in production |
 | Deduplication, provenance, queue, partial failures, exports | Implemented and verified in production |
 | Fixture fallback in live mode | Structurally impossible (fixture mode was deleted) |
 
-Everything except the final authenticated extraction is implemented, deployed, and
-verified. The deployed service fails closed — it returns `UPSTREAM_AUTH_REQUIRED`
-(HTTP 503) rather than fake data — until a real LinkedIn session is configured.
+Everything is implemented and deployed. The deployed service fails closed —
+`UPSTREAM_CHALLENGE` / `UPSTREAM_CIRCUIT_OPEN` (HTTP 503) rather than fake data —
+whenever LinkedIn refuses the session, and the breaker's cooldown probe restores
+extraction automatically when LinkedIn allows it again.
 
 ### The one remaining step (operator action, about one minute)
 
