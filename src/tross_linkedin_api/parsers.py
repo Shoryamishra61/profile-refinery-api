@@ -79,7 +79,8 @@ def _media(value: Any) -> dict[str, Any] | None:
                 if not isinstance(artifact, dict):
                     continue
                 segment = artifact.get("fileIdentifyingUrlPathSegment")
-                width = artifact.get("width") if isinstance(artifact.get("width"), int) else 0
+                raw_width = artifact.get("width")
+                width = raw_width if isinstance(raw_width, int) else 0
                 if isinstance(segment, str) and width > best_width:
                     built: dict[str, Any] = {
                         "url": f"https://media.licdn.com/dms/image/v2/{asset_id}/{segment}",
@@ -90,7 +91,8 @@ def _media(value: Any) -> dict[str, Any] | None:
                     best_width = width
                     best_built = built
         elif isinstance(node.get("downloadUrl"), str):
-            width = node.get("width") if isinstance(node.get("width"), int) else 0
+            raw_width = node.get("width")
+            width = raw_width if isinstance(raw_width, int) else 0
             if width > best_width:
                 built = {"url": node["downloadUrl"]}
                 expires = node.get("expiresAt") or node.get("downloadUrlExpiresAt")
