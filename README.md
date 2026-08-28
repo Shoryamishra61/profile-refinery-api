@@ -405,25 +405,34 @@ vercel --prod
 - Logs are allowlisted operation events; cookies, API keys, and profile payloads
   are never logged.
 
+
 ## Limitations
 
 1. **Live extraction requires a session cookie.** Without `LINKEDIN_LI_AT` the
-   service is correct-but-unready (503). This is the current production state and is
-   honestly reported by `/readyz`.
-2. **Sessions expire.** LinkedIn sessions last weeks-to-months; when one dies,
+   service is correct-but-unready (503), honestly reported by `/readyz`.
+2. **Client fingerprinting.** LinkedIn flags generic HTTP-client fingerprints for
+   scripted voyager calls: a freshly logged-in session typically serves one
+   scripted request, after which calls from the same client answer the
+   soft-challenge 302 for a cooldown window. The system treats this as a first-
+   class capacity event (breaker OPEN, jobs retained, automatic cooldown probe).
+   Overcoming it would require mimicking a browser TLS fingerprint or automating
+   logins - both rejected as safeguard evasion. Extraction was verified with real
+   data within the usable window; sustained extraction from datacenter IPs
+   (serverless egress) is currently refused by LinkedIn and fails closed.
+3. **Sessions expire.** LinkedIn sessions last weeks-to-months; when one dies,
    extraction fails closed with `UPSTREAM_AUTH_EXPIRED` until a human rotates it.
-3. **Decoration drift.** LinkedIn rotates response template revisions; the
+4. **Decoration drift.** LinkedIn rotates response template revisions; the
    decoration list is config, but a fully retired list needs a new entry (one YAML
    line) discovered from a live session.
-4. **Visibility.** Only sections visible to the authenticated account are returned;
+5. **Visibility.** Only sections visible to the authenticated account are returned;
    the rest are `not_provided`.
-5. **Rate limits.** The owned account is subject to LinkedIn's throttling; the
+6. **Rate limits.** The owned account is subject to LinkedIn's throttling; the
    service keeps request volume minimal (one upstream request per profile in the
    common case) and bounded.
-6. **Serverless state.** Batch jobs live in the instance's memory with a per-request
+7. **Serverless state.** Batch jobs live in the instance's memory with a per-request
    time budget; very large batches must be polled. There is no cross-restart
    persistence by design (nothing about a batch needs to outlive the work).
-7. **ToS posture.** The system uses one owned, legitimate session and makes no
+8. **ToS posture.** The system uses one owned, legitimate session and makes no
    attempt to defeat challenges or bot walls; it fails closed instead.
 
 ## Reverse-engineering notes
