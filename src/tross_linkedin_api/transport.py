@@ -36,7 +36,9 @@ _INCLUDED_KEY = '{"included"'
 class Transport(Protocol):
     call_count: int
 
-    async def execute(self, semantic_name: str, slug: str, request_id: str) -> OperationResult: ...
+    async def execute(
+        self, semantic_name: str, slug: str, request_id: str, resource_id: str | None = None
+    ) -> OperationResult: ...
 
     async def aclose(self) -> None: ...
 
@@ -47,8 +49,10 @@ class FixtureTransport:
         self._fixture_root = fixture_root.resolve()
         self.call_count = 0
 
-    async def execute(self, semantic_name: str, slug: str, request_id: str) -> OperationResult:
-        del slug
+    async def execute(
+        self, semantic_name: str, slug: str, request_id: str, resource_id: str | None = None
+    ) -> OperationResult:
+        del slug, resource_id
         operation = self._registry.get(semantic_name)
         if not operation.fixture:
             raise UpstreamOperationDrift(
@@ -190,24 +194,34 @@ class LinkedInTransport:
             "accept-language": self._settings.linkedin_accept_language,
         }
 
-    async def execute(self, semantic_name: str, slug: str, request_id: str) -> OperationResult:
+    async def execute(
+        self, semantic_name: str, slug: str, request_id: str, resource_id: str | None = None
+    ) -> OperationResult:
         operation = self._registry.get(semantic_name)
         if operation.kind is TransportKind.HTML:
             return await self._execute_page(operation, slug, request_id)
-        return await self._execute_restli(operation, slug, request_id)
+        return await self._execute_restli(operation, slug, request_id, resource_id)
 
     async def _execute_restli(
-        self, operation: Operation, slug: str, request_id: str
+        self, operation: Operation, slug: str, request_id: str, resource_id: str | None = None
     ) -> OperationResult:
         """Try each registered decoration id until one yields a usable payload.
 
         Decoration versions are LinkedIn-side template revisions that rotate; a
         retired version answers 404/410 while a current one answers 200. Trying
         the configured list in order keeps the contract self-healing without
-        guessing during a live request.
+        guessing during a live request. A path containing {resource_id} is a
+        sub-resource (e.g. profileCards): resource_id is substituted and the
+        memberIdentity query parameters are omitted.
         """
         started = time.perf_counter()
-        url = f"{UPSTREAM_ORIGIN}{operation.path}"
+        path = (
+            operation.path.replace("{resource_id}", resource_id)
+            if resource_id
+            else operation.path
+        )
+        sub_resource = resource_id is not None and "{resource_id}" in operation.path
+        url = f"{UPSTREAM_ORIGIN}{path}"
         last_error: UpstreamOperationDrift | None = None
         attempts = 0
         # An empty decoration list is a valid configuration: the observed
@@ -215,6 +229,8 @@ class LinkedInTransport:
         decorations: list[str | None] = list(operation.decoration_ids) or [None]
         for decoration in decorations:
             params: dict[str, str] = {"q": "memberIdentity", "memberIdentity": slug}
+            if sub_resource:
+                params = {}
             if decoration is not None:
                 params["decorationId"] = decoration
             result, error = await self._request_json(

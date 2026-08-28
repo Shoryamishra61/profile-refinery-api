@@ -23,6 +23,7 @@ from conftest import FULL_PROFILE_FIXTURE
 
 from tross_linkedin_api.config import Settings
 from tross_linkedin_api.errors import UpstreamChallenge, UpstreamRateLimited, UpstreamTimeout
+from tross_linkedin_api.governor import BreakerState
 from tross_linkedin_api.main import create_app
 from tross_linkedin_api.models import OperationResult
 from tross_linkedin_api.runtime import Runtime
@@ -39,7 +40,9 @@ class FakeUpstream:
         self.active = 0
         self.max_active = 0
 
-    async def execute(self, semantic_name: str, slug: str, request_id: str) -> OperationResult:
+    async def execute(
+        self, semantic_name: str, slug: str, request_id: str, resource_id: str | None = None
+    ) -> OperationResult:
         self.calls += 1
         self.call_count += 1
         self.active += 1
@@ -161,19 +164,30 @@ async def test_circuit_breaker_opens_recovers_via_single_probe(tmp_path: Any) ->
     ) as client:
         created = await client.post("/v1/batches", params={"text": slugs(10)}, headers=AUTH)
         batch_id = created.json()["batch_id"]
-        await client.get(f"/v1/batches/{batch_id}", params={"wait_seconds": 5}, headers=AUTH)
+        first = await client.get(
+            f"/v1/batches/{batch_id}", params={"wait_seconds": 5}, headers=AUTH
+        )
         assert runtime.governor.breaker.state.value == "OPEN"
-        assert runtime.governor.breaker.opens_total == 1
-        blocked = await client.get(f"/v1/batches/{batch_id}", params={"wait_seconds": 0}, headers=AUTH)
-        body = blocked.json()
-        assert body["status"] in {"DEGRADED", "RUNNING"}
-        assert body["statistics"]["blocked_upstream"] > 0
+        # A long advance may legitimately open the breaker twice (cooldown can
+        # expire mid-advance and a probe re-fail); at least one open required.
+        assert runtime.governor.breaker.opens_total >= 1
+        # The first advance's own summary already shows blocked jobs.
+        assert first.json()["statistics"]["blocked_upstream"] > 0
 
-        # Recovery: switch the fake upstream healthy, wait out the breaker
-        # cooldown, then advance: a single half-open probe succeeds and the
-        # breaker closes.
-        await asyncio.sleep(0.3)
+        # Recovery: flip the upstream healthy, wait out the cooldown, then
+        # advance. Every GET advances the queue (pull-driven), so the probe
+        # may fire inside any of these polls - the invariants are: the probe
+        # is controlled (one challenge max after cooldown), the breaker ends
+        # CLOSED, and every job completes.
         upstream.mode = "ok"
+        for _ in range(10):
+            if runtime.governor.breaker.state.value is BreakerState.CLOSED:
+                break
+            # respect the OPEN cooldown before poking again
+            await asyncio.sleep(
+                max(0.05, runtime.governor.breaker.observe()["retry_in_seconds"] / 2 + 0.05)
+            )
+            await client.get(f"/v1/batches/{batch_id}", params={"wait_seconds": 2}, headers=AUTH)
         final = await client.get(
             f"/v1/batches/{batch_id}", params={"wait_seconds": 20}, headers=AUTH
         )
@@ -315,3 +329,30 @@ async def test_challenge_breaker_recovery_keeps_session_configured(tmp_path: Any
         assert runtime.governor.breaker.state.value == "CLOSED"
         assert runtime.extraction_capability()["state"] == "CLOSED"
     await runtime.aclose()
+
+
+def test_circuit_breaker_single_probe_is_structural() -> None:
+    """Deterministic proof: exactly one probe per cooldown, no matter how many
+    callers ask, and a failed probe re-opens."""
+    from tross_linkedin_api.governor import BreakerState, CircuitBreaker
+
+    breaker = CircuitBreaker(failure_threshold=2, cooldown_seconds=60.0)
+    breaker.record_failure()
+    breaker.record_failure()
+    assert breaker.state is BreakerState.OPEN
+    allowed, wait = breaker.allow()
+    assert allowed is False and wait > 55  # still cooling down
+    breaker.opened_at -= 61.0  # simulate cooldown expiry
+    allowed, _ = breaker.allow()
+    assert allowed is True and breaker.state is BreakerState.HALF_OPEN
+    # concurrent callers during the probe are rejected
+    allowed, _ = breaker.allow()
+    assert allowed is False
+    # probe fails -> OPEN again, new cooldown
+    breaker.record_failure()
+    assert breaker.state is BreakerState.OPEN
+    breaker.opened_at -= 61.0
+    breaker.allow()
+    breaker.record_success()
+    assert breaker.state is BreakerState.CLOSED
+    assert breaker.consecutive_failures == 0

@@ -37,7 +37,9 @@ class StubTransport:
     def set_for_slug(self, semantic_name: str, slug: str, outcomes: list[Any]) -> None:
         self.slug_script[(semantic_name, slug)] = list(outcomes)
 
-    async def execute(self, semantic_name: str, slug: str, request_id: str) -> OperationResult:
+    async def execute(
+        self, semantic_name: str, slug: str, request_id: str, resource_id: str | None = None
+    ) -> OperationResult:
         self.call_count += 1
         self.seen.append((semantic_name, slug))
         queue = self.slug_script.get((semantic_name, slug))

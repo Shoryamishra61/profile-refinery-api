@@ -1,15 +1,22 @@
 version: 2
 operations:
-  # Primary operation: the member-finder Rest.li resource. Observed live on
-  # 2026-08-28 answering 200 JSON for an authenticated session:
-  #   GET /voyager/api/identity/dash/profiles?q=memberIdentity&memberIdentity={slug}
-  # The classic /voyager/api/identity/profiles/{slug}/profileView path is
-  # retired (HTTP 410) and the intermediate /voyager/api/identity/dash/profileView
-  # path answers 404 for every decoration id, so the collection resource is the
-  # current documented profile data path. Decoration ids are kept as an optional
-  # configuration knob for richer projections; none is currently registered
-  # because the default projection already carries the profile entity.
+  # Primary operation. LIVE_VERIFIED 2026-08-28: observed HTTP 200 with a real
+  # member payload (publicIdentifier + firstName/lastName/headline/summary/
+  # profilePicture/backgroundPicture verified against the live entity).
   - semantic_name: profile_view
+    enabled: true
+    evidence_status: live_verified
+    kind: restli
+    method: GET
+    path: /voyager/api/identity/dash/profiles
+    transport_family: restli
+    parser: full_profile_v1
+    decoration_ids: []
+    observed_at: 2026-08-29T00:00:00Z
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#dash-profiles
+  # Full-profile projection: single-call attempt for every section. Decorations
+  # rotate; tried before per-section cards when sections are missing.
+  - semantic_name: profile_view_full
     enabled: true
     evidence_status: historical
     kind: restli
@@ -17,12 +24,28 @@ operations:
     path: /voyager/api/identity/dash/profiles
     transport_family: restli
     parser: full_profile_v1
-    decoration_ids: []
-    observed_at: 2026-08-28T00:00:00Z
+    decoration_ids:
+      - com.linkedin.voyager.dash.deco.identity.profile.WebFullProfileWithEntityActions-20
+      - com.linkedin.voyager.dash.deco.identity.profile.WebFullProfileWithEntityActions-19
+    observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#dash-profiles
-  # Fallback operation: direct authenticated fetch of the profile page itself and
-  # extraction of the embedded Voyager JSON entities. Used when the Rest.li
-  # contract drifts. Still pure HTTP; no browser is involved.
+  # Per-section profile cards. The core entity references
+  # urn:li:fsd_profileCard:({memberId},{SECTION},{locale}); the card resource
+  # answers for {memberId}-{SECTION}-{locale}. Parsed with the matching
+  # section parser by the orchestrator.
+  - semantic_name: profile_sections
+    enabled: true
+    evidence_status: historical
+    kind: restli
+    method: GET
+    path: /voyager/api/identity/dash/profileCards/{resource_id}
+    transport_family: restli
+    parser: full_profile_v1
+    decoration_ids: []
+    observed_at: 2026-08-29T00:00:00Z
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+  # Fallback operation: direct authenticated fetch of the profile page itself
+  # and extraction of embedded Voyager JSON. Pure HTTP; no browser.
   - semantic_name: profile_page
     enabled: true
     evidence_status: historical
@@ -31,5 +54,5 @@ operations:
     path: /in/{slug}/
     transport_family: web
     parser: full_profile_v1
-    observed_at: 2026-08-28T00:00:00Z
+    observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#embedded-page-json

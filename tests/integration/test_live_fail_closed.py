@@ -77,7 +77,9 @@ def test_live_response_rejects_fixture_sentinels() -> None:
 class _SentinelTransport:
     call_count = 1
 
-    async def execute(self, semantic_name: str, slug: str, request_id: str) -> object:
+    async def execute(
+        self, semantic_name: str, slug: str, request_id: str, resource_id: str | None = None
+    ) -> object:
         from tross_linkedin_api.models import OperationResult
 
         payload = {

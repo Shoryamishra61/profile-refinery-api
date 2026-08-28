@@ -60,21 +60,45 @@ def _date(value: Any) -> dict[str, int] | None:
 
 
 def _media(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, dict):
-        return None
-    candidates = list(_objects(value))
-    artifacts = [node for node in candidates if isinstance(node.get("downloadUrl"), str)]
-    if not artifacts:
-        return None
-    artifact = artifacts[-1]
-    result: dict[str, Any] = {"url": artifact["downloadUrl"]}
-    asset = value.get("vectorArtifact") or value.get("displayImage") or value.get("originalImage")
-    if isinstance(asset, str):
-        result["artifact_id"] = asset
-    expires = artifact.get("expiresAt") or artifact.get("downloadUrlExpiresAt")
-    if isinstance(expires, int):
-        result["expires_at"] = expires
-    return result
+    """Extract the largest usable image from dash/legacy media shapes.
+
+    Real dash shapes seen live: profilePicture.displayImage.vectorImage and
+    backgroundPictures: [{...vectorImage...}] (a list). Legacy shapes expose
+    ready-made downloadUrl nodes. Both handled by scanning the nested objects.
+    """
+    best_width = -1
+    best_built: dict[str, Any] | None = None
+    for node in _objects(value):
+        if not isinstance(node, dict):
+            continue
+        artifacts = node.get("artifacts")
+        asset = node.get("digitalmediaAsset")
+        if isinstance(artifacts, list) and isinstance(asset, str):
+            asset_id = asset.split(":")[-1]
+            for artifact in artifacts:
+                if not isinstance(artifact, dict):
+                    continue
+                segment = artifact.get("fileIdentifyingUrlPathSegment")
+                width = artifact.get("width") if isinstance(artifact.get("width"), int) else 0
+                if isinstance(segment, str) and width > best_width:
+                    built: dict[str, Any] = {
+                        "url": f"https://media.licdn.com/dms/image/v2/{asset_id}/{segment}",
+                        "artifact_id": asset_id,
+                    }
+                    if isinstance(artifact.get("expiresAt"), int):
+                        built["expires_at"] = artifact["expiresAt"]
+                    best_width = width
+                    best_built = built
+        elif isinstance(node.get("downloadUrl"), str):
+            width = node.get("width") if isinstance(node.get("width"), int) else 0
+            if width > best_width:
+                built = {"url": node["downloadUrl"]}
+                expires = node.get("expiresAt") or node.get("downloadUrlExpiresAt")
+                if isinstance(expires, int):
+                    built["expires_at"] = expires
+                best_width = width
+                best_built = built
+    return best_built
 
 
 def parse_core(payload: dict[str, Any]) -> dict[str, Any]:
