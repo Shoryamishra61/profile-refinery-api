@@ -50,3 +50,18 @@
 - Published the cleaned documentation tree at public commit `8d916ab`. GitHub reported no
   deployments; provider credential variables were absent; an `APP_MODE=live` preflight
   failed closed on the missing LinkedIn session secrets as designed.
+
+### Production recovery — 2026-08-28
+
+- Traced `/v1/profiles` through authentication, canonicalization, runtime selection,
+  operation registry, transport, parsers, normalization, schema validation, and response.
+- Confirmed the synthetic production response was caused by the explicit Vercel setting
+  `APP_MODE=fixture`, not by a hidden live-to-fixture fallback.
+- Added explicit retrieval provenance and a hard live sentinel guard for fixture-only IDs,
+  companies, and institutions.
+- Changed live startup to a safe degraded state when no live-verified core operation exists;
+  readiness and profile requests now return explicit 503 behavior without invoking fixtures.
+- Deployed Vercel production in live mode and verified health 200, readiness 503, missing
+  caller key 401, malformed URL 400, and three unrelated real URLs 503 with zero sentinel leaks.
+- Direct LinkedIn HTTP checks for those profiles returned 429 without profile-specific data;
+  authenticated extraction remains blocked by absent owned-session/current-operation evidence.

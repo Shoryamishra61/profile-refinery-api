@@ -5,7 +5,7 @@ LinkedIn member URL into a stable, provenance-carrying JSON profile.**
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.116+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-54%20passing-2E7D32.svg)](RESULTS.md)
+[![Tests](https://img.shields.io/badge/tests-57%20passing-2E7D32.svg)](RESULTS.md)
 [![Evidence](https://img.shields.io/badge/live%20evidence-blocked-D97706.svg)](JUDGE_AUDIT.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -14,6 +14,11 @@ LinkedIn member URL into a stable, provenance-carrying JSON profile.**
 > operations are `fixture_verified`, not evidence that LinkedIn currently serves the same
 > private response shapes. Live mode therefore fails closed until every enabled operation
 > has current, authorized replay evidence.
+
+Production is deployed at <https://tross-linkedin-profile-api.vercel.app> in fail-closed
+`live` mode. `/healthz` is available, `/readyz` reports 503, and profile requests return
+`UPSTREAM_OPERATION_UNAVAILABLE` until a current live-verified core operation and owned
+session are configured. Production does not return fixture profiles.
 
 ## Abstract
 
@@ -265,7 +270,7 @@ and [security](SECURITY.md).
 - Offline research implementation: **complete and verified**
 - Public source release: **available**
 - Live LinkedIn operations: **blocked pending current authorized evidence**
-- Public API deployment: **blocked pending live evidence and deployment credentials**
+- Public API deployment: **online in fail-closed live mode; extraction unavailable pending live evidence**
 
 The exact open gates and evidence are maintained in [JUDGE_AUDIT.md](JUDGE_AUDIT.md).
 

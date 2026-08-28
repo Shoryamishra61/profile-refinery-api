@@ -1,14 +1,14 @@
 # Adversarial Judge Audit
 
-Audit date: 2026-08-27. Overall challenge verdict: **PARTIAL / externally blocked**, not PASS.
+Audit updated: 2026-08-28. Overall challenge verdict: **PARTIAL / externally blocked**, not PASS.
 
-The repository is a reproducible, secured, no-browser implementation with honest fixture evidence. It is not yet a completed live Tross submission because no current LinkedIn operation/session evidence or public HTTPS deployment was available.
+The repository is a reproducible, secured, no-browser implementation with honest fixture evidence. A public Vercel service now exists in fail-closed live mode. It is not yet a completed live Tross submission because no current LinkedIn operation/session evidence is available and live profile requests correctly return 503.
 
 ## Definition of Done
 
 | Gate | Status | Executable evidence |
 |---|---|---|
-| Fresh clone installs; locked package; no path hacks | PASS | clean clone passed sync, 54 tests, benchmark, and security scan |
+| Fresh clone installs; locked package; no path hacks | PASS | clean clone passed sync; current suite has 57 tests |
 | Fixtures, schema, registry shipped | PASS | `tests/fixtures`, `schemas`, `config`; startup tests |
 | Direct LinkedIn HTTP runtime | PASS as implementation; BLOCKED as live observation | `transport.py`; mocked direct transport contract tests; no live call |
 | No browser/DOM runtime | PASS | `uv run python scripts/security_audit.py` |
@@ -25,7 +25,7 @@ The repository is a reproducible, secured, no-browser implementation with honest
 | API key required | PASS | missing/invalid integration tests and OpenAPI security scheme |
 | Fixed outbound host; SSRF/redirect tests | PASS | canonicalizer and transport contract tests |
 | Challenge fail closed | PASS as contract test | 403 and checkpoint handling; no live challenge claim |
-| Public HTTPS URL/evaluator request/restart | FAIL — external blocker | no deployment provider authentication; no URL claimed |
+| Public HTTPS URL/evaluator request/restart | PARTIAL | Vercel URL, health, readiness, auth, and fail-closed profile path exercised; real extraction unavailable |
 | Health/readiness/OpenAPI/local evaluator call | PASS locally | API integration and process smoke test |
 | README and required technical documents | PASS | research README; 56 maintained Markdown files lint clean; 57 local links resolve |
 | Docker image builds and serves API | PASS | image manifest `sha256:76f1e36d...`; container returned health and six-operation fixture profile |
@@ -54,10 +54,11 @@ The repository is a reproducible, secured, no-browser implementation with honest
 ## External blockers with evidence
 
 1. Environment contained no `LINKEDIN_*`, `LI_AT`, `JSESSIONID`, or current query-ID variables. No authorized capture/profile matrix was supplied. Attempting guessed historical endpoints would violate project evidence policy.
-2. Railway, Fly, Wrangler, Zerops, Render, and Vercel CLIs were absent; Hugging Face was not authenticated; no deployment-provider variables existed. GitHub's deployment API returned an empty deployment list.
+2. Vercel device authentication was completed and the service deployed at `https://tross-linkedin-profile-api.vercel.app`; hosting access is no longer a blocker.
 3. GitHub repository publication succeeded, but the OAuth token lacked `workflow` scope. GitHub rejected `.github/workflows/ci.yml`; no SSH key or connected browser was available to approve the device grant.
 4. Docker Desktop was initially stopped; it was started and the build/container smoke gate subsequently passed.
-5. A direct `APP_MODE=live` deployment preflight failed closed with the expected validation error for missing `LINKEDIN_LI_AT` and `LINKEDIN_JSESSIONID`; all checked-in operations remain fixture-verified rather than live-verified.
+5. Production now starts in degraded `APP_MODE=live`, reports readiness 503, and returns `UPSTREAM_OPERATION_UNAVAILABLE` for profile requests. All checked-in operations remain fixture-verified rather than live-verified.
+6. Direct HTTP requests to the requested Shorya profile plus Satya Nadella and Bill Gates returned LinkedIn 429 responses without profile-specific content. No owned session, current query identifiers, authorized capture, or consented differential ground truth is present.
 
 ## Release decision
 
