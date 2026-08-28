@@ -17,6 +17,7 @@ from .errors import (
     ProblemError,
     UnauthorizedCaller,
 )
+from .metrics import METRICS
 from .models import ProfileResponse
 from .rate_limit import SlidingWindowLimiter
 from .runtime import Runtime
@@ -50,10 +51,45 @@ def build_router(runtime: Runtime) -> APIRouter:
 
     @router.get("/readyz", tags=["operations"])
     async def ready() -> JSONResponse:
-        status = 200 if runtime.ready else 503
+        capability = runtime.extraction_capability()
+        ready = runtime.ready
+        body: dict[str, object] = {
+            "status": "ready" if ready else "not_ready",
+            "extraction_capability": capability,
+        }
+        return JSONResponse(body, status_code=200 if ready else 503)
+
+    @router.get("/v1/capability", tags=["operations"])
+    async def capability(
+        x_api_key: str | None = Security(API_KEY_HEADER),
+    ) -> JSONResponse:
+        _authorized(x_api_key, runtime)
+        queue = batches.queue_stats()
+        metrics = METRICS.snapshot()
+        metrics["gauges"]["queue_depth"] = queue["queue_depth"]
+        metrics["gauges"]["jobs_running"] = queue["jobs_running"]
+        metrics["gauges"]["queue_oldest_age_seconds"] = queue["queue_oldest_age_seconds"]
         return JSONResponse(
-            {"status": "ready" if runtime.ready else "not_ready"}, status_code=status
+            {
+                "extraction_capability": runtime.extraction_capability(),
+                "queue": queue,
+                "metrics": metrics,
+            }
         )
+
+    @router.get("/metrics", tags=["operations"], include_in_schema=False)
+    async def metrics_endpoint() -> Response:
+        queue = batches.queue_stats()
+        METRICS.set_gauge("queue_depth", queue["queue_depth"])
+        METRICS.set_gauge("jobs_running", queue["jobs_running"])
+        METRICS.set_gauge("queue_oldest_age_seconds", queue["queue_oldest_age_seconds"])
+        METRICS.set_gauge("jobs_blocked_upstream", queue["jobs_blocked_upstream"])
+        breaker = runtime.governor.breaker
+        METRICS.set_gauge(
+            "breaker_state",
+            {"CLOSED": 0, "OPEN": 1, "HALF_OPEN": 2}[breaker.state.value],
+        )
+        return Response(content=METRICS.prometheus(), media_type="text/plain")
 
     @router.get(
         "/v1/profiles",

@@ -11,7 +11,10 @@ async def test_healthz_is_public_and_readyz_reflects_session(client: httpx.Async
     assert (await client.get("/healthz")).json() == {"status": "ok"}
     response = await client.get("/readyz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ready"}
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["extraction_capability"]["state"] == "CLOSED"
+    assert "governor" in body["extraction_capability"]
 
 
 @pytest.mark.asyncio
@@ -78,8 +81,13 @@ async def test_error_responses_carry_request_id(client: httpx.AsyncClient) -> No
 async def test_upstream_failure_is_explicit_never_fixture(
     client: httpx.AsyncClient, stub_transport: object
 ) -> None:
-    stub_transport.set("profile_view", [UpstreamTimeout("profile_view")])
-    stub_transport.set("profile_page", [UpstreamTimeout("profile_page")])
+    # Two failures per operation: the governor owns one bounded retry.
+    stub_transport.set(
+        "profile_view", [UpstreamTimeout("profile_view"), UpstreamTimeout("profile_view")]
+    )
+    stub_transport.set(
+        "profile_page", [UpstreamTimeout("profile_page"), UpstreamTimeout("profile_page")]
+    )
     response = await client.get(
         "/v1/profiles",
         params={"url": "https://www.linkedin.com/in/test-integration-profile/"},

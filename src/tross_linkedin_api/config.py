@@ -37,11 +37,19 @@ class Settings(BaseSettings):
     app_operation_registry_path: Path = Path("config/operation_registry.yaml")
     app_upstream_timeout_seconds: float = Field(default=12.0, gt=0, le=60)
     app_upstream_max_bytes: int = Field(default=5_000_000, ge=1024, le=20_000_000)
-    app_upstream_retries: int = Field(default=1, ge=0, le=2)
+    app_upstream_retries: int = Field(default=1, ge=0, le=3)
+    # Upstream governor: the single control plane for all LinkedIn traffic.
+    app_upstream_concurrency: int = Field(default=2, ge=1, le=10)
+    app_upstream_bucket_capacity: int = Field(default=4, ge=1, le=500)
+    app_upstream_refill_per_minute: float = Field(default=12.0, gt=0, le=6000)
+    app_breaker_failure_threshold: int = Field(default=3, ge=1, le=200)
+    app_breaker_cooldown_seconds: float = Field(default=300.0, gt=0, le=3600)
+    # Durable job journal directory (survives warm process restarts).
+    app_store_dir: Path = Path("./.tross_store")
     app_batch_max_urls: int = Field(default=200, ge=1, le=5_000)
     app_batch_max_file_bytes: int = Field(default=5_242_880, ge=1024, le=52_428_800)
     app_batch_concurrency: int = Field(default=3, ge=1, le=10)
-    app_batch_time_budget_seconds: float = Field(default=8.0, gt=0, le=30)
+    app_batch_time_budget_seconds: float = Field(default=8.0, gt=0, le=60)
     linkedin_li_at: SecretStr | None = None
     linkedin_jsessionid: SecretStr | None = None
     # Optional full session context in raw `Cookie:` header form

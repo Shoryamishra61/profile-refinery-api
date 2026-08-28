@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 import time
@@ -241,104 +240,88 @@ class LinkedInTransport:
         started: float,
         attempts: int,
     ) -> tuple[OperationResult | None, Exception | None]:
-        retries = self._settings.app_upstream_retries
-        challenge_retry = 0
-        for attempt in range(1, retries + 3):
-            # Rebuild headers per attempt: the jar's JSESSIONID may have been
-            # rotated by the previous response's Set-Cookie.
-            headers = self._api_headers()
-            try:
-                async with self._client.stream(
-                    "GET", url, headers=headers, params=params
-                ) as response:
-                    self.call_count += 1
-                    duration = (time.perf_counter() - started) * 1000
-                    if response.is_redirect:
-                        # LinkedIn redirects requests carrying an invalid or
-                        # expired li_at to the authwall; classify that as an
-                        # expired session rather than operation drift.
-                        location = response.headers.get("location", "")
-                        if "authwall" in location or "login" in location:
-                            self._session.fail_closed()
-                            raise UpstreamAuthExpired()
-                        if challenge_retry < 1:
-                            # A same-URL redirect is the soft-challenge signal:
-                            # retry once with the refreshed cookie jar, then
-                            # fail closed. Never loop.
-                            challenge_retry += 1
-                            await asyncio.sleep(1.5)
-                            continue
+        """Single-attempt JSON request. Retry policy lives in the governor —
+        this method performs exactly one HTTP attempt and either returns a
+        result, a decoration-fallthrough signal, or a typed failure."""
+        # The jar's JSESSIONID may have been rotated by a previous response.
+        headers = self._api_headers()
+        try:
+            async with self._client.stream("GET", url, headers=headers, params=params) as response:
+                self.call_count += 1
+                duration = (time.perf_counter() - started) * 1000
+                if response.is_redirect:
+                    # Authwall/login redirects mean the li_at session is dead.
+                    location = response.headers.get("location", "")
+                    if "authwall" in location or "login" in location:
                         self._session.fail_closed()
-                        raise UpstreamChallenge()
-                    if response.status_code != 404:
-                        self._classify_status(response, operation.semantic_name)
-                    media_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
-                    raw = await self._read_limited(response, operation.semantic_name)
-                    if response.status_code == 404:
-                        if media_type in _JSON_CONTENT_TYPES:
-                            # A JSON 404 from a current decoration means the
-                            # profile itself is absent for this viewer.
-                            raise ProfileNotFound()
-                        return None, UpstreamOperationDrift(
-                            operation.semantic_name,
-                            "Decoration request answered 404 with an HTML error page.",
-                        )
-                    if media_type not in _JSON_CONTENT_TYPES:
-                        if media_type == "text/html":
-                            lowered = raw[:4096].lower()
-                            if b"checkpoint" in lowered or b"challenge" in lowered:
-                                self._session.fail_closed()
-                                raise UpstreamChallenge()
-                        # A retired decoration answers with an HTML error page.
-                        return None, UpstreamOperationDrift(
-                            operation.semantic_name,
-                            "Upstream answered a decoration request with non-JSON content.",
-                        )
-                    try:
-                        payload = json.loads(raw)
-                    except json.JSONDecodeError:
-                        # A malformed body means this decoration is not usable;
-                        # the next registered one may still answer correctly.
-                        return None, UpstreamOperationDrift(
-                            operation.semantic_name, "Upstream returned malformed JSON."
-                        )
-                    if not isinstance(payload, dict):
-                        return None, UpstreamOperationDrift(
-                            operation.semantic_name, "Upstream JSON root is not an object."
-                        )
-                    status = payload.get("data", {})
-                    if isinstance(status, dict) and status.get("status") == 404:
+                        raise UpstreamAuthExpired()
+                    # A same-URL redirect is LinkedIn's soft-challenge signal.
+                    self._session.fail_closed()
+                    raise UpstreamChallenge()
+                if response.status_code != 404:
+                    self._classify_status(response, operation.semantic_name)
+                media_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+                raw = await self._read_limited(response, operation.semantic_name)
+                if response.status_code == 404:
+                    if media_type in _JSON_CONTENT_TYPES:
+                        # A JSON 404 from a current resource means the profile
+                        # itself is absent for this viewer.
                         raise ProfileNotFound()
-                    log_operation(
-                        OperationEvent(
-                            request_id,
-                            operation.semantic_name,
-                            duration,
-                            response.status_code,
-                            "pending",
-                            attempt + attempts,
-                        )
+                    return None, UpstreamOperationDrift(
+                        operation.semantic_name,
+                        "Request answered 404 with an HTML error page.",
                     )
-                    return (
-                        OperationResult(
-                            operation=operation.semantic_name,
-                            payload=payload,
-                            duration_ms=duration,
-                            status_code=response.status_code,
-                        ),
-                        None,
+                if media_type not in _JSON_CONTENT_TYPES:
+                    if media_type == "text/html":
+                        lowered = raw[:4096].lower()
+                        if b"checkpoint" in lowered or b"challenge" in lowered:
+                            self._session.fail_closed()
+                            raise UpstreamChallenge()
+                    # A retired decoration answers with an HTML error page.
+                    return None, UpstreamOperationDrift(
+                        operation.semantic_name,
+                        "Upstream answered a decoration request with non-JSON content.",
                     )
-            except httpx.TimeoutException:
-                if attempt > retries:
-                    return None, UpstreamTimeout(operation.semantic_name)
-                await asyncio.sleep(0.2 * attempt)
-            except (httpx.ConnectError, httpx.ReadError):
-                if attempt > retries:
-                    return None, UpstreamTimeout(operation.semantic_name)
-                await asyncio.sleep(0.2 * attempt)
-            except UpstreamRateLimited as exc:
-                return None, exc
-        return None, UpstreamOperationDrift(operation.semantic_name, "Unreachable retry state.")
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError:
+                    # A malformed body means this decoration is not usable;
+                    # the next registered one may still answer correctly.
+                    return None, UpstreamOperationDrift(
+                        operation.semantic_name, "Upstream returned malformed JSON."
+                    )
+                if not isinstance(payload, dict):
+                    return None, UpstreamOperationDrift(
+                        operation.semantic_name, "Upstream JSON root is not an object."
+                    )
+                status = payload.get("data", {})
+                if isinstance(status, dict) and status.get("status") == 404:
+                    raise ProfileNotFound()
+                log_operation(
+                    OperationEvent(
+                        request_id,
+                        operation.semantic_name,
+                        duration,
+                        response.status_code,
+                        "pending",
+                        attempts + 1,
+                    )
+                )
+                return (
+                    OperationResult(
+                        operation=operation.semantic_name,
+                        payload=payload,
+                        duration_ms=duration,
+                        status_code=response.status_code,
+                    ),
+                    None,
+                )
+        except httpx.TimeoutException as exc:
+            timeout_error = UpstreamTimeout(operation.semantic_name)
+            raise timeout_error from exc
+        except (httpx.ConnectError, httpx.ReadError) as exc:
+            timeout_error = UpstreamTimeout(operation.semantic_name)
+            raise timeout_error from exc
 
     async def _execute_page(
         self, operation: Operation, slug: str, request_id: str

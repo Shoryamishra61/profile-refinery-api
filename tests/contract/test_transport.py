@@ -224,13 +224,13 @@ async def test_authwall_redirect_is_session_expired(monkeypatch) -> None:
 
 
 @respx.mock
-async def test_same_url_redirect_retries_once_then_challenge(monkeypatch) -> None:
+async def test_same_url_redirect_is_challenge(monkeypatch) -> None:
     _, _, session, transport = live_components(monkeypatch)
     route = respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
         return_value=Response(302, headers={"location": f"https://www.linkedin.com{DASH_PATH}?q=memberIdentity"})
     )
     with pytest.raises(UpstreamChallenge):
         await transport.execute("profile_view", "some-person", "req-1")
-    assert route.call_count == 2
+    assert route.call_count == 1  # single attempt; retry policy lives in the governor
     assert session.available is False
     await transport.aclose()

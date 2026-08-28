@@ -10,7 +10,8 @@ from .errors import (
     UpstreamFailure,
     UpstreamOperationUnavailable,
 )
-from .models import ProfileResponse, ResponseMeta, Retrieval
+from .governor import CircuitOpen, UpstreamGovernor
+from .models import OperationResult, ProfileResponse, ResponseMeta, Retrieval
 from .normalizer import normalize_profile
 from .operation_registry import OperationRegistry
 from .parsers import parse
@@ -33,10 +34,24 @@ class ProfileOrchestrator:
         registry: OperationRegistry,
         transport: Transport,
         validator: SchemaValidator,
+        governor: UpstreamGovernor | None = None,
     ) -> None:
         self._registry = registry
         self._transport = transport
         self._validator = validator
+        # The governor is the single control plane for upstream operations.
+        # Tests may inject a transport without a governor; that path invokes
+        # the transport directly with no scarce-upstream policy.
+        self._governor = governor
+
+    async def _execute(
+        self, semantic_name: str, slug: str, request_id: str
+    ) -> OperationResult:
+        if self._governor is None:
+            return await self._transport.execute(semantic_name, slug, request_id)
+        return await self._governor.run(
+            semantic_name, lambda: self._transport.execute(semantic_name, slug, request_id)
+        )
 
     async def fetch(
         self, canonical: CanonicalProfile, request_id: str, observed_at: datetime | None = None
@@ -52,9 +67,13 @@ class ProfileOrchestrator:
                 continue
             attempted.append(semantic_name)
             try:
-                result = await self._transport.execute(semantic_name, canonical.slug, request_id)
+                result = await self._execute(semantic_name, canonical.slug, request_id)
                 break
             except ProfileNotFound:
+                raise
+            except CircuitOpen:
+                # Breaker policy is global: when the circuit opens, ALL
+                # extraction stops — including fallback attempts.
                 raise
             except UpstreamFailure as exc:
                 last_error = exc

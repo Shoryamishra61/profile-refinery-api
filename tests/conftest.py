@@ -75,6 +75,10 @@ def settings() -> Settings:
         app_operation_registry_path="config/operation_registry.yaml",
         linkedin_li_at="test-session",
         linkedin_jsessionid='"ajax:fixture-test"',
+        # High breaker threshold: request-mapping tests assert error typing,
+        # not breaker transitions (those have dedicated tests).
+        app_breaker_failure_threshold=50,
+        app_store_dir="./.tross_store_test",
     )
 
 
