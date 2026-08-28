@@ -46,8 +46,6 @@ class Operation(BaseModel):
             raise ValueError("operation path must be an absolute safe LinkedIn path")
         if self.enabled and not self.parser:
             raise ValueError("enabled operations require a parser")
-        if self.kind is TransportKind.RESTLI and self.enabled and not self.decoration_ids:
-            raise ValueError("enabled restli operations require at least one decoration id")
         return self
 
 

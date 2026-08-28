@@ -1,31 +1,28 @@
 version: 2
 operations:
-  # Primary operation: the modern dash Rest.li profileView resource. Verified live
-  # behaviour (anonymous probe, 2026-08-28): the /voyager/api surface enforces a
-  # csrf-token header derived from the JSESSIONID cookie and the
-  # x-restli-protocol-version: 2.0.0 header. The classic
-  # /voyager/api/identity/profiles/{slug}/profileView path is retired (HTTP 410),
-  # so the dash resource is the current documented profile data path. Decoration
-  # identifiers are tried in order to tolerate server-side deco version drift.
+  # Primary operation: the member-finder Rest.li resource. Observed live on
+  # 2026-08-28 answering 200 JSON for an authenticated session:
+  #   GET /voyager/api/identity/dash/profiles?q=memberIdentity&memberIdentity={slug}
+  # The classic /voyager/api/identity/profiles/{slug}/profileView path is
+  # retired (HTTP 410) and the intermediate /voyager/api/identity/dash/profileView
+  # path answers 404 for every decoration id, so the collection resource is the
+  # current documented profile data path. Decoration ids are kept as an optional
+  # configuration knob for richer projections; none is currently registered
+  # because the default projection already carries the profile entity.
   - semantic_name: profile_view
     enabled: true
     evidence_status: historical
     kind: restli
     method: GET
-    path: /voyager/api/identity/dash/profileView
+    path: /voyager/api/identity/dash/profiles
     transport_family: restli
     parser: full_profile_v1
-    decoration_ids:
-      - com.linkedin.voyager.dash.deco.identity.profile.WebFullProfileWithEntityActions-20
-      - com.linkedin.voyager.dash.deco.identity.profile.WebFullProfileWithEntityActions-19
-      - com.linkedin.voyager.dash.deco.identity.profile.WebFullProfile-16
-      - com.linkedin.voyager.dash.deco.identity.profile.WebTopCardCoreProfile-19
-      - com.linkedin.voyager.dash.deco.identity.profile.WebTopCardCoreProfile-18
+    decoration_ids: []
     observed_at: 2026-08-28T00:00:00Z
-    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#dash-profileview
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#dash-profiles
   # Fallback operation: direct authenticated fetch of the profile page itself and
   # extraction of the embedded Voyager JSON entities. Used when the Rest.li
-  # decoration contract drifts. Still pure HTTP; no browser is involved.
+  # contract drifts. Still pure HTTP; no browser is involved.
   - semantic_name: profile_page
     enabled: true
     evidence_status: historical

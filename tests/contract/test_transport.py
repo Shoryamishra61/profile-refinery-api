@@ -20,7 +20,7 @@ from tross_linkedin_api.operation_registry import OperationRegistry
 from tross_linkedin_api.session import SessionProvider
 from tross_linkedin_api.transport import LinkedInTransport
 
-DASH_PATH = "/voyager/api/identity/dash/profileView"
+DASH_PATH = "/voyager/api/identity/dash/profiles"
 
 
 def live_components(
@@ -38,6 +38,29 @@ def live_components(
     session = SessionProvider(settings)
     transport = LinkedInTransport(settings, registry, session)
     return settings, registry, session, transport
+
+
+def registry_with_decoration(tmp_path: Path, decorations: list[str]) -> OperationRegistry:
+    registry_path = tmp_path / "registry.yaml"
+    decoration_lines = "".join(f"      - {item}\n" for item in decorations)
+    registry_path.write_text(
+        "version: 2\n"
+        "operations:\n"
+        "  - semantic_name: profile_view\n"
+        "    enabled: true\n"
+        "    evidence_status: historical\n"
+        "    kind: restli\n"
+        "    method: GET\n"
+        "    path: /voyager/api/identity/dash/profiles\n"
+        "    transport_family: restli\n"
+        "    parser: full_profile_v1\n"
+        "    decoration_ids:\n"
+        f"{decoration_lines}"
+        "    observed_at: 2026-08-28T00:00:00Z\n"
+        "    evidence_reference: test\n",
+        encoding="utf-8",
+    )
+    return OperationRegistry.load(registry_path)
 
 
 def valid_payload() -> dict[str, object]:
@@ -66,15 +89,27 @@ async def test_restli_request_carries_csrf_and_session_cookies(monkeypatch) -> N
     assert route.called
     request = route.calls.last.request
     assert request.headers["csrf-token"] == "ajax:test-session"
-    assert "li_at=test-li-at-value" in request.headers["cookie"]
+    cookie_header = request.headers.get("cookie", "")
+    assert "li_at=test-li-at-value" in cookie_header
+    assert "ajax%3Atest-session" in cookie_header or "ajax:test-session" in cookie_header
     assert request.headers["x-restli-protocol-version"] == "2.0.0"
     assert "memberIdentity=some-person" in str(request.url)
+    assert "decorationId" not in str(request.url)
     assert result.payload == valid_payload()
 
 
 @respx.mock
-async def test_retired_decoration_html_404_falls_through_to_next(monkeypatch) -> None:
+async def test_retired_decoration_html_404_falls_through_to_next(
+    monkeypatch, tmp_path: Path
+) -> None:
     _, _, _, transport = live_components(monkeypatch)
+    transport._registry = registry_with_decoration(
+        tmp_path,
+        [
+            "com.linkedin.voyager.dash.deco.identity.profile.WebTopCardCoreProfile-18",
+            "com.linkedin.voyager.dash.deco.identity.profile.WebTopCardCoreProfile-19",
+        ],
+    )
     route = respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
         side_effect=[
             Response(404, text="<html>error page</html>"),
@@ -184,5 +219,18 @@ async def test_authwall_redirect_is_session_expired(monkeypatch) -> None:
     )
     with pytest.raises(UpstreamAuthExpired):
         await transport.execute("profile_view", "some-person", "req-1")
+    assert session.available is False
+    await transport.aclose()
+
+
+@respx.mock
+async def test_same_url_redirect_retries_once_then_challenge(monkeypatch) -> None:
+    _, _, session, transport = live_components(monkeypatch)
+    route = respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
+        return_value=Response(302, headers={"location": f"https://www.linkedin.com{DASH_PATH}?q=memberIdentity"})
+    )
+    with pytest.raises(UpstreamChallenge):
+        await transport.execute("profile_view", "some-person", "req-1")
+    assert route.call_count == 2
     assert session.available is False
     await transport.aclose()

@@ -122,7 +122,16 @@ class LinkedInTransport:
         the JSESSIONID cookie (quotes stripped) — a request without it is
         rejected with 403 "CSRF check failed" before any authorization check.
       * The classic /voyager/api/identity/profiles/{slug}/profileView resource
-        is retired (HTTP 410); the dash profileView resource is current.
+        is retired (HTTP 410). The current member-finder resource observed live
+        (2026-08-28) is /voyager/api/identity/dash/profiles?q=memberIdentity,
+        which answers 200 JSON for an authenticated session.
+      * LinkedIn rotates session cookies server-side; the transport therefore
+        seeds a persistent cookie jar with li_at/JSESSIONID and lets the jar
+        track Set-Cookie across requests, deriving csrf-token from the jar's
+        current JSESSIONID on every call.
+      * Bursty scripted traffic is answered with a same-URL 302 that clears
+        cookies (soft challenge). The transport never loops: one same-URL
+        retry, then an explicit UPSTREAM_CHALLENGE.
       * Unauthenticated page requests are refused with the 999 bot-wall status;
         an owned `li_at` session is therefore required for live extraction.
     """
@@ -136,22 +145,37 @@ class LinkedInTransport:
         timeout = httpx.Timeout(settings.app_upstream_timeout_seconds, connect=5.0)
         limits = httpx.Limits(max_connections=10, max_keepalive_connections=5)
         self._client = httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=False)
+        if self._session.available:
+            seeded = self._session.load()
+            self._client.cookies.set("li_at", seeded.li_at, domain=".linkedin.com")
+            self._client.cookies.set(
+                "JSESSIONID", f'"{seeded.jsessionid}"', domain=".www.linkedin.com"
+            )
         self.call_count = 0
 
+    def _csrf_token(self) -> str:
+        # The jar's JSESSIONID is authoritative: the server rotates it and the
+        # CSRF contract requires the header to match the cookie sent.
+        current = self._client.cookies.get("JSESSIONID", domain=".www.linkedin.com")
+        if not current:
+            current = self._client.cookies.get("JSESSIONID") or ""
+        if not current:
+            current = self._session.load().jsessionid
+        return current.strip('"')
+
     def _api_headers(self) -> dict[str, str]:
-        session = self._session.load()
+        self._session.load()  # fail closed when no session is configured
         return {
             "accept": "application/vnd.linkedin.normalized+json+2.1",
-            "csrf-token": session.csrf_token,
+            "csrf-token": self._csrf_token(),
             "x-restli-protocol-version": "2.0.0",
             "x-li-lang": "en_US",
             "user-agent": self._settings.linkedin_user_agent,
             "accept-language": self._settings.linkedin_accept_language,
-            "cookie": f"li_at={session.li_at}; JSESSIONID=\"{session.jsessionid}\"",
         }
 
     def _page_headers(self) -> dict[str, str]:
-        session = self._session.load()
+        self._session.load()  # fail closed when no session is configured
         return {
             "accept": (
                 "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,"
@@ -159,7 +183,6 @@ class LinkedInTransport:
             ),
             "user-agent": self._settings.linkedin_user_agent,
             "accept-language": self._settings.linkedin_accept_language,
-            "cookie": f"li_at={session.li_at}; JSESSIONID=\"{session.jsessionid}\"",
         }
 
     async def execute(self, semantic_name: str, slug: str, request_id: str) -> OperationResult:
@@ -182,12 +205,13 @@ class LinkedInTransport:
         url = f"{UPSTREAM_ORIGIN}{operation.path}"
         last_error: UpstreamOperationDrift | None = None
         attempts = 0
-        for decoration in operation.decoration_ids:
-            params = {
-                "q": "memberIdentity",
-                "memberIdentity": slug,
-                "decorationId": decoration,
-            }
+        # An empty decoration list is a valid configuration: the observed
+        # memberIdentity finder answers with its default projection.
+        decorations: list[str | None] = list(operation.decoration_ids) or [None]
+        for decoration in decorations:
+            params: dict[str, str] = {"q": "memberIdentity", "memberIdentity": slug}
+            if decoration is not None:
+                params["decorationId"] = decoration
             result, error = await self._request_json(
                 operation, request_id, url, params, started, attempts
             )
@@ -211,9 +235,12 @@ class LinkedInTransport:
         started: float,
         attempts: int,
     ) -> tuple[OperationResult | None, Exception | None]:
-        headers = self._api_headers()
         retries = self._settings.app_upstream_retries
-        for attempt in range(1, retries + 2):
+        challenge_retry = 0
+        for attempt in range(1, retries + 3):
+            # Rebuild headers per attempt: the jar's JSESSIONID may have been
+            # rotated by the previous response's Set-Cookie.
+            headers = self._api_headers()
             try:
                 async with self._client.stream(
                     "GET", url, headers=headers, params=params
@@ -228,9 +255,15 @@ class LinkedInTransport:
                         if "authwall" in location or "login" in location:
                             self._session.fail_closed()
                             raise UpstreamAuthExpired()
-                        raise UpstreamOperationDrift(
-                            operation.semantic_name, "Upstream redirects are refused."
-                        )
+                        if challenge_retry < 1:
+                            # A same-URL redirect is the soft-challenge signal:
+                            # retry once with the refreshed cookie jar, then
+                            # fail closed. Never loop.
+                            challenge_retry += 1
+                            await asyncio.sleep(1.5)
+                            continue
+                        self._session.fail_closed()
+                        raise UpstreamChallenge()
                     if response.status_code != 404:
                         self._classify_status(response, operation.semantic_name)
                     media_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
@@ -290,11 +323,11 @@ class LinkedInTransport:
                         None,
                     )
             except httpx.TimeoutException:
-                if attempt == retries + 1:
+                if attempt > retries:
                     return None, UpstreamTimeout(operation.semantic_name)
                 await asyncio.sleep(0.2 * attempt)
             except (httpx.ConnectError, httpx.ReadError):
-                if attempt == retries + 1:
+                if attempt > retries:
                     return None, UpstreamTimeout(operation.semantic_name)
                 await asyncio.sleep(0.2 * attempt)
             except UpstreamRateLimited as exc:
@@ -349,9 +382,9 @@ class LinkedInTransport:
             if "authwall" in location or "login" in location:
                 self._session.fail_closed()
                 raise UpstreamAuthExpired()
-            raise UpstreamOperationDrift(
-                operation, "Upstream redirects are refused."
-            )
+            # A same-URL redirect is the soft-challenge signal.
+            self._session.fail_closed()
+            raise UpstreamChallenge()
         if response.status_code == 999:
             self._session.fail_closed()
             raise UpstreamChallenge()

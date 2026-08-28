@@ -63,7 +63,9 @@ operations:
         loaded.get("unverified_op")
 
 
-def test_restli_operation_requires_decoration_ids(tmp_path: Path) -> None:
+def test_restli_operation_without_decoration_ids_is_allowed(tmp_path: Path) -> None:
+    # The live-observed memberIdentity finder answers with its default
+    # projection, so a decoration list is optional configuration.
     registry = tmp_path / "registry.yaml"
     registry.write_text(
         """version: 1
@@ -73,16 +75,17 @@ operations:
     evidence_status: historical
     kind: restli
     method: GET
-    path: /voyager/api/identity/dash/profileView
+    path: /voyager/api/identity/dash/profiles
     transport_family: restli
     parser: full_profile_v1
+    decoration_ids: []
     observed_at: 2026-08-28T00:00:00Z
     evidence_reference: none
 """,
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="invalid operation registry"):
-        OperationRegistry.load(registry)
+    loaded = OperationRegistry.load(registry)
+    assert loaded.enabled_names() == ["bare_op"]
 
 
 def test_registry_rejects_unsafe_path(tmp_path: Path) -> None:
