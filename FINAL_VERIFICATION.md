@@ -10,6 +10,8 @@ All results below are **actually observed** during the final pass on
 | Production URL | https://tross-linkedin-profile-api.vercel.app |
 | Repository | https://github.com/Shoryamishra61/tross-linkedin-profile-api |
 | Final pass date | 2026-08-28 |
+| Deployed functional commit | `da29968` (Vercel production deploy of this tree) |
+| Repository HEAD at submission | `71df0d7` (docs/CI finalization only; functionally identical to deployed commit) |
 | Deployment | Vercel project `tross-linkedin-profile-api` (Production) |
 | Stack | Python 3.12, FastAPI, httpx, pydantic v2, deployed on Vercel serverless |
 
