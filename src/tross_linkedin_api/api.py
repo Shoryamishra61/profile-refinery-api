@@ -1,22 +1,35 @@
 from __future__ import annotations
 
 import hmac
+import json
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, Security
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, Query, Request, Security, UploadFile
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.security import APIKeyHeader
 
+from .batch.service import BatchService
 from .canonicalizer import canonicalize_profile_url
-from .config import AppMode
-from .demo import DEMO_HTML
-from .errors import CallerRateLimited, ProblemError, UnauthorizedCaller
+from .errors import (
+    CallerRateLimited,
+    InvalidProfileUrl,
+    ProblemError,
+    UnauthorizedCaller,
+)
 from .models import ProfileResponse
 from .rate_limit import SlidingWindowLimiter
 from .runtime import Runtime
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def _authorized(x_api_key: str | None, runtime: Runtime) -> str:
+    if x_api_key is None or not any(
+        hmac.compare_digest(x_api_key, expected) for expected in runtime.settings.api_key_values
+    ):
+        raise UnauthorizedCaller()
+    return x_api_key
 
 
 def build_router(runtime: Runtime) -> APIRouter:
@@ -25,19 +38,11 @@ def build_router(runtime: Runtime) -> APIRouter:
         runtime.settings.app_rate_limit_requests,
         runtime.settings.app_rate_limit_window_seconds,
     )
+    batches = BatchService(runtime)
 
     @router.get("/", include_in_schema=False)
     async def root() -> RedirectResponse:
-        return RedirectResponse(
-            url="/demo" if runtime.settings.app_mode is AppMode.FIXTURE else "/docs"
-        )
-
-    if runtime.settings.app_mode is AppMode.FIXTURE:
-
-        @router.get("/demo", include_in_schema=False)
-        async def demo() -> HTMLResponse:
-            return HTMLResponse(content=DEMO_HTML)
-
+        return RedirectResponse(url="/docs")
 
     @router.get("/healthz", tags=["operations"])
     async def health() -> dict[str, str]:
@@ -56,6 +61,7 @@ def build_router(runtime: Runtime) -> APIRouter:
         responses={
             400: {"content": {"application/problem+json": {}}},
             401: {},
+            404: {},
             429: {},
             502: {},
             503: {},
@@ -68,17 +74,95 @@ def build_router(runtime: Runtime) -> APIRouter:
         url: Annotated[str, Query(min_length=1, max_length=2048)],
         x_api_key: str | None = Security(API_KEY_HEADER),
     ) -> ProfileResponse:
-        if x_api_key is None or not any(
-            hmac.compare_digest(x_api_key, expected) for expected in runtime.settings.api_key_values
-        ):
-            raise UnauthorizedCaller()
-        retry_after = limiter.check(x_api_key)
+        caller = _authorized(x_api_key, runtime)
+        retry_after = limiter.check(caller)
         if retry_after is not None:
             raise CallerRateLimited(retry_after)
         canonical = canonicalize_profile_url(url)
         runtime.ensure_profile_available()
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         return await runtime.orchestrator.fetch(canonical, request_id)
+
+    @router.post(
+        "/v1/batches",
+        responses={
+            400: {"content": {"application/problem+json": {}}},
+            401: {},
+            413: {},
+            422: {},
+        },
+        tags=["batches"],
+    )
+    async def create_batch(
+        request: Request,
+        x_api_key: str | None = Security(API_KEY_HEADER),
+        text: Annotated[str | None, Query(max_length=1_000_000)] = None,
+        files: list[UploadFile] | None = None,
+    ) -> JSONResponse:
+        _authorized(x_api_key, runtime)
+        content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+        if not text and content_type != "multipart/form-data":
+            # Accept pasted text as a JSON document body or as a raw
+            # text/plain body, in addition to the ?text= query parameter.
+            # Multipart bodies belong to the file uploads and are left alone.
+            body = await request.body()
+            if len(body) > 1_000_000:
+                raise InvalidProfileUrl("The request body exceeds the maximum text size.")
+            if content_type == "application/json" and body:
+                try:
+                    document = json.loads(body)
+                except json.JSONDecodeError as exc:
+                    raise InvalidProfileUrl("The JSON body is malformed.") from exc
+                if isinstance(document, dict):
+                    candidate = document.get("text")
+                    text = candidate if isinstance(candidate, str) else None
+            elif body:
+                text = body.decode("utf-8", errors="replace")
+        idempotency_key = request.headers.get("Idempotency-Key")
+        batch = await batches.create(
+            pasted_text=text, files=files or [], idempotency_key=idempotency_key
+        )
+        return JSONResponse(batch.summary(), status_code=202)
+
+    @router.get("/v1/batches/{batch_id}", tags=["batches"])
+    async def get_batch(
+        batch_id: str,
+        x_api_key: str | None = Security(API_KEY_HEADER),
+        wait_seconds: Annotated[float | None, Query(ge=0, le=25)] = None,
+    ) -> JSONResponse:
+        _authorized(x_api_key, runtime)
+        batch = await batches.advance(batch_id, wait_seconds)
+        return JSONResponse({**batch.summary(), "report": batches.aggregate(batch.batch_id)})
+
+    @router.get("/v1/batches/{batch_id}/profiles", tags=["batches"])
+    async def get_batch_profiles(
+        batch_id: str,
+        x_api_key: str | None = Security(API_KEY_HEADER),
+        include_responses: bool = False,
+    ) -> JSONResponse:
+        _authorized(x_api_key, runtime)
+        await batches.advance(batch_id, 0.0)
+        return JSONResponse(batches.profiles(batch_id, include_responses))
+
+    @router.get("/v1/batches/{batch_id}/profiles/{profile_id}", tags=["batches"])
+    async def get_batch_profile(
+        batch_id: str,
+        profile_id: str,
+        x_api_key: str | None = Security(API_KEY_HEADER),
+    ) -> JSONResponse:
+        _authorized(x_api_key, runtime)
+        await batches.advance(batch_id, 0.0)
+        return JSONResponse(batches.profile(batch_id, profile_id))
+
+    @router.get("/v1/batches/{batch_id}/export", tags=["batches"])
+    async def export_batch(
+        batch_id: str,
+        x_api_key: str | None = Security(API_KEY_HEADER),
+        format: Annotated[str, Query(pattern="^(json|csv|xlsx)$")] = "csv",
+    ) -> Response:
+        _authorized(x_api_key, runtime)
+        await batches.advance(batch_id, 0.0)
+        return batches.export(batch_id, format)  # type: ignore[no-any-return]
 
     return router
 

@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tross.dev/schemas/linkedin-profile-response-1.0.0.json",
+  "$id": "https://tross.dev/schemas/linkedin-profile-response-1.1.0.json",
   "title": "Tross LinkedIn Profile Response",
   "type": "object",
   "required": ["schema_version", "input_url", "canonical_url", "observed_at", "partial", "retrieval", "profile", "meta"],
   "properties": {
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
     "input_url": {"type": "string", "format": "uri", "maxLength": 2048},
     "canonical_url": {"type": "string", "format": "uri", "pattern": "^https://www\\.linkedin\\.com/in/[A-Za-z0-9_-]+$"},
     "observed_at": {"type": "string", "format": "date-time"},
@@ -14,8 +14,8 @@
       "type": "object",
       "required": ["mode", "source", "fixture", "requested_url", "canonical_url", "observed_at", "partial"],
       "properties": {
-        "mode": {"enum": ["fixture", "live"]},
-        "source": {"enum": ["synthetic_fixture", "linkedin"]},
+        "mode": {"enum": ["live"]},
+        "source": {"enum": ["linkedin"]},
         "fixture": {"type": "boolean"},
         "requested_url": {"type": "string", "format": "uri", "maxLength": 2048},
         "canonical_url": {"type": "string", "format": "uri", "pattern": "^https://www\\.linkedin\\.com/in/[A-Za-z0-9_-]+$"},
@@ -45,11 +45,12 @@
     },
     "meta": {
       "type": "object",
-      "required": ["viewer_context", "operations_attempted", "operations_succeeded", "upstream_calls", "upstream_latency_ms", "warnings"],
+      "required": ["viewer_context", "operations_attempted", "operations_succeeded", "transport_strategy", "upstream_calls", "upstream_latency_ms", "warnings"],
       "properties": {
         "viewer_context": {"type": "string"},
         "operations_attempted": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "operations_succeeded": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "transport_strategy": {"type": "string", "minLength": 1},
         "upstream_calls": {"type": "integer", "minimum": 0},
         "upstream_latency_ms": {"type": "number", "minimum": 0},
         "warnings": {"type": "array", "items": {"type": "string"}}

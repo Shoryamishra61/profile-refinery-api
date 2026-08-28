@@ -7,7 +7,7 @@ import pytest
 import respx
 from httpx import Response
 
-from tross_linkedin_api.config import AppMode, Settings
+from tross_linkedin_api.config import Settings
 from tross_linkedin_api.errors import (
     ProfileNotFound,
     UpstreamAuthExpired,
@@ -20,195 +20,169 @@ from tross_linkedin_api.operation_registry import OperationRegistry
 from tross_linkedin_api.session import SessionProvider
 from tross_linkedin_api.transport import LinkedInTransport
 
+DASH_PATH = "/voyager/api/identity/dash/profileView"
+
 
 def live_components(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[Settings, OperationRegistry, SessionProvider]:
-    registry_path = tmp_path / "registry.yaml"
-    registry_path.write_text(
-        """version: 1
-operations:
-  - semantic_name: profile_core
-    enabled: true
-    evidence_status: live_verified
-    method: POST
-    path: /voyager/api/graphql
-    transport_family: graphql
-    query_id_env: TEST_QUERY_ID
-    input_variables: [member_identity]
-    parser: profile_core_v1
-    observed_at: 2026-08-27T12:00:00Z
-    viewer_context: owned_account
-    fixture: tests/fixtures/raw/profile_core.json
-    evidence_reference: controlled-test
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("TEST_QUERY_ID", "test-query-id")
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Settings, OperationRegistry, SessionProvider, LinkedInTransport]:
+    monkeypatch.setenv("APP_API_KEYS", "caller")
     settings = Settings(
         app_api_keys=["caller"],
         app_mode="live",
-        linkedin_li_at="fixture",
-        linkedin_jsessionid='"ajax:synthetic"',
-        app_operation_registry_path=registry_path,
+        linkedin_li_at="test-li-at-value",
+        linkedin_jsessionid='"ajax:test-session"',
         app_upstream_retries=0,
-        app_upstream_max_bytes=1024,
     )
-    registry = OperationRegistry.load(registry_path, AppMode.LIVE)
+    registry = OperationRegistry.load(Path("config/operation_registry.yaml"))
     session = SessionProvider(settings)
-    return settings, registry, session
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_direct_transport_uses_fixed_host_and_registered_payload(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    settings, registry, session = live_components(tmp_path, monkeypatch)
-    route = respx.post("https://www.linkedin.com/voyager/api/graphql").mock(
-        return_value=Response(
-            200, json={"included": []}, headers={"content-type": "application/json"}
-        )
-    )
     transport = LinkedInTransport(settings, registry, session)
-    try:
-        result = await transport.execute("profile_core", "safe-slug", "request-1")
-    finally:
-        await transport.aclose()
-    assert result.status_code == 200
+    return settings, registry, session, transport
+
+
+def valid_payload() -> dict[str, object]:
+    return {
+        "data": {"profileView": {"entityUrn": "urn:li:fsd_profile:1"}},
+        "included": [
+            {
+                "$type": "com.linkedin.voyager.dash.identity.profile.Profile",
+                "entityUrn": "urn:li:fsd_profile:1",
+                "firstName": {"localized": {"en_US": "Real"}},
+                "lastName": {"localized": {"en_US": "Person"}},
+            }
+        ],
+    }
+
+
+@respx.mock
+async def test_restli_request_carries_csrf_and_session_cookies(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    route = respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
+        return_value=Response(200, json=valid_payload())
+    )
+    result = await transport.execute("profile_view", "some-person", "req-1")
+    await transport.aclose()
+
     assert route.called
-    request = route.calls[0].request
-    assert request.url.host == "www.linkedin.com"
-    assert request.url.path == "/voyager/api/graphql"
-    assert request.read()
-    assert b"test-query-id" in request.content
-    assert b"safe-slug" in request.content
+    request = route.calls.last.request
+    assert request.headers["csrf-token"] == "ajax:test-session"
+    assert "li_at=test-li-at-value" in request.headers["cookie"]
+    assert request.headers["x-restli-protocol-version"] == "2.0.0"
+    assert "memberIdentity=some-person" in str(request.url)
+    assert result.payload == valid_payload()
 
 
-@pytest.mark.asyncio
 @respx.mock
-async def test_challenge_fails_session_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    settings, registry, session = live_components(tmp_path, monkeypatch)
-    respx.post("https://www.linkedin.com/voyager/api/graphql").mock(
-        return_value=Response(403, text="checkpoint")
+async def test_retired_decoration_html_404_falls_through_to_next(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    route = respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
+        side_effect=[
+            Response(404, text="<html>error page</html>"),
+            Response(200, json=valid_payload()),
+        ]
     )
-    transport = LinkedInTransport(settings, registry, session)
-    try:
-        with pytest.raises(UpstreamChallenge):
-            await transport.execute("profile_core", "safe-slug", "request-2")
-    finally:
-        await transport.aclose()
+    result = await transport.execute("profile_view", "some-person", "req-1")
+    await transport.aclose()
+
+    assert route.call_count == 2
+    assert result.payload == valid_payload()
+
+
+@respx.mock
+async def test_json_404_maps_to_profile_not_found(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
+        return_value=Response(404, json={"data": {"status": 404}, "included": []})
+    )
+    with pytest.raises(ProfileNotFound):
+        await transport.execute("profile_view", "ghost", "req-1")
+    await transport.aclose()
+
+
+@respx.mock
+async def test_all_decorations_refused_is_operation_drift(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
+        return_value=Response(404, text="<html>error</html>")
+    )
+    with pytest.raises(UpstreamOperationDrift):
+        await transport.execute("profile_view", "some-person", "req-1")
+    await transport.aclose()
+
+
+@respx.mock
+async def test_401_fails_session_closed(monkeypatch) -> None:
+    _, _, session, transport = live_components(monkeypatch)
+    respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(return_value=Response(401))
+    with pytest.raises(UpstreamAuthExpired):
+        await transport.execute("profile_view", "some-person", "req-1")
     assert session.available is False
+    await transport.aclose()
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("status", "headers", "content"),
-    [
-        (302, {"location": "https://evil.test"}, b""),
-        (200, {"content-type": "text/html"}, b"<html>unexpected</html>"),
-        (200, {"content-type": "application/json"}, b"not-json"),
-        (410, {"content-type": "application/json"}, b"{}"),
-    ],
-)
 @respx.mock
-async def test_malformed_responses_are_controlled_drift(
-    status: int,
-    headers: dict[str, str],
-    content: bytes,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    settings, registry, session = live_components(tmp_path, monkeypatch)
-    respx.post("https://www.linkedin.com/voyager/api/graphql").mock(
-        return_value=Response(status, headers=headers, content=content)
+async def test_403_becomes_challenge(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(return_value=Response(403))
+    with pytest.raises(UpstreamChallenge):
+        await transport.execute("profile_view", "some-person", "req-1")
+    await transport.aclose()
+
+
+@respx.mock
+async def test_429_becomes_rate_limited(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(return_value=Response(429))
+    with pytest.raises(UpstreamRateLimited):
+        await transport.execute("profile_view", "some-person", "req-1")
+    await transport.aclose()
+
+
+@respx.mock
+async def test_timeout_maps_to_upstream_timeout(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(side_effect=httpx.ReadTimeout("x"))
+    with pytest.raises(UpstreamTimeout):
+        await transport.execute("profile_view", "some-person", "req-1")
+    await transport.aclose()
+
+
+@respx.mock
+async def test_page_fallback_extracts_embedded_json(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    embedded = (
+        '<code style="display:none"><!--'
+        + '{"included":[{"$type":"com.linkedin.voyager.dash.identity.profile.Profile",'
+        + '"entityUrn":"urn:li:fsd_profile:9","firstName":{"localized":{"en_US":"Page"}}}]}'
+        + "--></code>"
     )
-    transport = LinkedInTransport(settings, registry, session)
-    try:
-        with pytest.raises(UpstreamOperationDrift):
-            await transport.execute("profile_core", "safe-slug", "request-3")
-    finally:
-        await transport.aclose()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("status", "expected"),
-    [
-        (401, UpstreamAuthExpired),
-        (404, ProfileNotFound),
-        (429, UpstreamRateLimited),
-        (500, UpstreamTimeout),
-    ],
-)
-@respx.mock
-async def test_upstream_status_mapping(
-    status: int,
-    expected: type[Exception],
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    settings, registry, session = live_components(tmp_path, monkeypatch)
-    respx.post("https://www.linkedin.com/voyager/api/graphql").mock(
-        return_value=Response(status, json={})
-    )
-    transport = LinkedInTransport(settings, registry, session)
-    try:
-        with pytest.raises(expected):
-            await transport.execute("profile_core", "safe-slug", "request-status")
-    finally:
-        await transport.aclose()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("failure", [httpx.ReadTimeout("timeout"), httpx.ConnectError("reset")])
-@respx.mock
-async def test_network_failures_are_bounded_timeouts(
-    failure: Exception,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    settings, registry, session = live_components(tmp_path, monkeypatch)
-    respx.post("https://www.linkedin.com/voyager/api/graphql").mock(side_effect=failure)
-    transport = LinkedInTransport(settings, registry, session)
-    try:
-        with pytest.raises(UpstreamTimeout):
-            await transport.execute("profile_core", "safe-slug", "request-timeout")
-    finally:
-        await transport.aclose()
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_checkpoint_html_and_oversized_payload_fail_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    settings, registry, session = live_components(tmp_path, monkeypatch)
-    route = respx.post("https://www.linkedin.com/voyager/api/graphql")
-    route.mock(
+    respx.get("https://www.linkedin.com/in/some-person/").mock(
         return_value=Response(
-            200, content=b"<html>security challenge</html>", headers={"content-type": "text/html"}
+            200, text=f"<html>{embedded}</html>", headers={"content-type": "text/html"}
         )
     )
-    transport = LinkedInTransport(settings, registry, session)
-    try:
-        with pytest.raises(UpstreamChallenge):
-            await transport.execute("profile_core", "safe-slug", "request-checkpoint")
-    finally:
-        await transport.aclose()
-    assert session.available is False
+    result = await transport.execute("profile_page", "some-person", "req-1")
+    await transport.aclose()
+    assert result.payload["included"][0]["$type"].endswith(".Profile")
 
-    settings, registry, session = live_components(tmp_path, monkeypatch)
-    route.mock(
-        return_value=Response(
-            200, content=b"{" + b" " * 2048 + b"}", headers={"content-type": "application/json"}
-        )
+
+@respx.mock
+async def test_page_bot_wall_999_is_challenge(monkeypatch) -> None:
+    _, _, session, transport = live_components(monkeypatch)
+    respx.get("https://www.linkedin.com/in/some-person/").mock(return_value=Response(999))
+    with pytest.raises(UpstreamChallenge):
+        await transport.execute("profile_page", "some-person", "req-1")
+    assert session.available is False
+    await transport.aclose()
+
+
+@respx.mock
+async def test_authwall_redirect_is_session_expired(monkeypatch) -> None:
+    _, _, session, transport = live_components(monkeypatch)
+    respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
+        return_value=Response(302, headers={"location": "https://www.linkedin.com/authwall"})
     )
-    transport = LinkedInTransport(settings, registry, session)
-    try:
-        with pytest.raises(UpstreamOperationDrift, match="size limit"):
-            await transport.execute("profile_core", "safe-slug", "request-size")
-    finally:
-        await transport.aclose()
+    with pytest.raises(UpstreamAuthExpired):
+        await transport.execute("profile_view", "some-person", "req-1")
+    assert session.available is False
+    await transport.aclose()

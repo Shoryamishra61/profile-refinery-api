@@ -12,6 +12,7 @@ from tross_linkedin_api.parsers import (
     parse_core,
     parse_education,
     parse_experience,
+    parse_full_profile,
     parse_languages,
     parse_skills,
 )
@@ -32,11 +33,29 @@ def test_core_parses_localized_name_and_largest_media() -> None:
     assert result["background_image"] is None
 
 
-def test_experience_resolves_company_reference_without_grouping() -> None:
-    result = parse_experience(load("experience"))
+def test_core_parses_public_identifier() -> None:
+    result = parse_core(load("full_profile"))
+    assert result["identity"]["public_identifier"] == "test-integration-profile"
+
+
+def test_experience_resolves_company_reference_and_current_role() -> None:
+    result = parse_experience(load("full_profile"))
     assert len(result) == 2
-    assert result[0]["company_name"] == "Synthetic Systems Ltd"
-    assert result[0]["group_id"] is None
+    assert result[0]["company_name"] == "Pipeline Validation Corp"
+    assert result[0]["company_url"] == "https://www.linkedin.com/company/pipeline-validation-corp/"
+    assert result[0]["is_current"] is True
+    assert result[1]["is_current"] is False
+
+
+def test_full_profile_extracts_every_section_from_one_payload() -> None:
+    result = parse_full_profile(load("full_profile"))
+    assert result["core"]["name"] == "Integration Check"
+    assert len(result["experience"]) == 2
+    assert len(result["education"]) == 1
+    assert len(result["skills"]) == 2
+    assert len(result["certifications"]) == 1
+    assert result["certifications"][0]["authority"] == "Open Verification Institute"
+    assert result["languages"][0]["proficiency"] == "NATIVE"
 
 
 def test_all_required_section_parsers() -> None:

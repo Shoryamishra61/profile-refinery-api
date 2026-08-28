@@ -44,24 +44,28 @@ def field(
     )
 
 
-def failed_field(operation: str, observed_at: datetime, status: FieldStatus) -> ProfileField[Any]:
-    return field(None, operation, observed_at, status=status)
-
-
 def normalize_profile(
     slug: str,
     core: dict[str, Any],
     sections: dict[str, Any],
-    section_failures: dict[str, FieldStatus],
     observed_at: datetime,
 ) -> Profile:
-    member_urn = core.get("identity", {}).get("member_urn")
+    """Deterministically normalize a parsed full-profile payload.
+
+    A section that is absent from the upstream payload is reported as
+    NOT_PROVIDED — never invented. Only explicit upstream failures remove
+    data that was actually observed.
+    """
+    identity_data = core.get("identity", {})
+    member_urn = identity_data.get("member_urn")
     core_ref = member_urn if isinstance(member_urn, str) else None
-    identity = Identity(vanity_slug=slug, member_urn=core_ref)
+    identity = Identity(
+        vanity_slug=slug,
+        member_urn=core_ref,
+        public_identifier=identity_data.get("public_identifier"),
+    )
 
     def section(name: str, model: type[Any]) -> ProfileField[Any]:
-        if name in section_failures:
-            return failed_field(name, observed_at, section_failures[name])
         raw = sections.get(name, [])
         try:
             values = [model.model_validate(item) for item in raw]

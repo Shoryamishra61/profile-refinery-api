@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -34,9 +37,26 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
     application.state.runtime = active_runtime
     application.include_router(build_router(active_runtime))
 
+    @application.middleware("http")
+    async def assign_request_id(request: Request, call_next: Any) -> Any:
+        request.state.tross_request_id = (
+            request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        )
+        return await call_next(request)
+
     @application.exception_handler(ProblemError)
     async def handle_problem(request: Request, exc: ProblemError) -> JSONResponse:
-        return problem_response(request, exc)
+        response = problem_response(request, exc)
+        # Correlation: every problem response carries the caller-visible request id.
+        request_id = getattr(request.state, "tross_request_id", None)
+        if request_id:
+            raw_body = response.body
+            body = json.loads(bytes(raw_body))
+            body["request_id"] = request_id
+            return JSONResponse(
+                body, status_code=response.status_code, headers=dict(response.headers)
+            )
+        return response
 
     @application.exception_handler(ValueError)
     async def handle_contract_failure(request: Request, exc: ValueError) -> JSONResponse:

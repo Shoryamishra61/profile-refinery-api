@@ -39,6 +39,7 @@ class ProfileField[T](StrictModel):
 class Identity(StrictModel):
     vanity_slug: str
     member_urn: str | None = None
+    public_identifier: str | None = None
 
 
 class DateValue(StrictModel):
@@ -52,8 +53,10 @@ class Experience(StrictModel):
     title: str | None = None
     company_name: str | None = None
     company_urn: str | None = None
+    company_url: str | None = None
     start_date: DateValue | None = None
     end_date: DateValue | None = None
+    is_current: bool | None = None
     location: str | None = None
     description: str | None = None
     group_id: str | None = None
@@ -115,15 +118,16 @@ class ResponseMeta(StrictModel):
     viewer_context: str
     operations_attempted: list[str]
     operations_succeeded: list[str]
+    transport_strategy: str
     upstream_calls: int = Field(ge=0)
     upstream_latency_ms: float = Field(ge=0)
     warnings: list[str]
 
 
 class Retrieval(StrictModel):
-    mode: Literal["fixture", "live"]
-    source: Literal["synthetic_fixture", "linkedin"]
-    fixture: bool
+    mode: Literal["live"]
+    source: Literal["linkedin"]
+    fixture: Literal[False]
     requested_url: str
     canonical_url: str
     observed_at: datetime
@@ -131,7 +135,7 @@ class Retrieval(StrictModel):
 
 
 class ProfileResponse(StrictModel):
-    schema_version: str = "1.0.0"
+    schema_version: str = "1.1.0"
     input_url: str
     canonical_url: str
     observed_at: datetime

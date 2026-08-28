@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Protocol
@@ -20,14 +20,23 @@ from .errors import (
 )
 from .models import OperationResult
 from .observability import OperationEvent, log_operation
-from .operation_registry import Operation, OperationRegistry
+from .operation_registry import Operation, OperationRegistry, TransportKind
 from .session import SessionProvider
 
 UPSTREAM_ORIGIN = "https://www.linkedin.com"
 _JSON_CONTENT_TYPES = {"application/json", "application/vnd.linkedin.normalized+json+2.1"}
+_MAX_HTML_EMBEDDED_BYTES = 4_000_000
+
+# Authenticated LinkedIn pages embed server-rendered Voyager entities inside
+# <code><!--{...}--></code> blocks. Embedded-JSON documents may also appear in
+# inline scripts; both shapes are scanned for {"included": [...]} documents.
+_CODE_BLOCK_RE = re.compile(r"<code[^>]*><!--(.*?)--></code>", re.DOTALL)
+_INCLUDED_KEY = '{"included"'
 
 
 class Transport(Protocol):
+    call_count: int
+
     async def execute(self, semantic_name: str, slug: str, request_id: str) -> OperationResult: ...
 
     async def aclose(self) -> None: ...
@@ -70,7 +79,54 @@ class FixtureTransport:
         return None
 
 
+def extract_embedded_json(html: str) -> dict[str, Any] | None:
+    """Return the richest embedded Voyager JSON document found in an HTML page.
+
+    Handles both the <code><!--{...}--></code> SSR blocks and inline-script JSON
+    documents that carry an "included" entity array. Returns None when no block
+    contains one, which callers treat as operation drift rather than as success.
+    """
+    best: dict[str, Any] | None = None
+    candidates: list[str] = [match.group(1) for match in _CODE_BLOCK_RE.finditer(html)]
+    start = 0
+    while True:
+        found = html.find(_INCLUDED_KEY, start)
+        if found == -1:
+            break
+        start = found + 1
+        candidates.append(html[found : found + _MAX_HTML_EMBEDDED_BYTES])
+    for candidate in candidates:
+        payload = _decode_json_object(candidate)
+        if isinstance(payload, dict) and isinstance(payload.get("included"), list):
+            size = len(payload["included"])
+            if best is None or size > len(best["included"]):
+                best = payload
+    return best
+
+
+def _decode_json_object(text: str) -> Any:
+    decoder = json.JSONDecoder()
+    try:
+        payload, _ = decoder.raw_decode(text.lstrip())
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return payload
+
+
 class LinkedInTransport:
+    """Direct HTTP transport for LinkedIn endpoints using an owned session.
+
+    Protocol model (evidence: anonymous probe on 2026-08-28, see
+    docs/REVERSE_ENGINEERING_PROTOCOL.md):
+      * /voyager/api resources require a `csrf-token` header whose value equals
+        the JSESSIONID cookie (quotes stripped) — a request without it is
+        rejected with 403 "CSRF check failed" before any authorization check.
+      * The classic /voyager/api/identity/profiles/{slug}/profileView resource
+        is retired (HTTP 410); the dash profileView resource is current.
+      * Unauthenticated page requests are refused with the 999 bot-wall status;
+        an owned `li_at` session is therefore required for live extraction.
+    """
+
     def __init__(
         self, settings: Settings, registry: OperationRegistry, session: SessionProvider
     ) -> None:
@@ -82,100 +138,239 @@ class LinkedInTransport:
         self._client = httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=False)
         self.call_count = 0
 
-    def _request_parts(
-        self, operation: Operation, slug: str
-    ) -> tuple[dict[str, str], dict[str, Any]]:
+    def _api_headers(self) -> dict[str, str]:
         session = self._session.load()
-        headers = {
+        return {
             "accept": "application/vnd.linkedin.normalized+json+2.1",
             "csrf-token": session.csrf_token,
             "x-restli-protocol-version": "2.0.0",
+            "x-li-lang": "en_US",
+            "user-agent": self._settings.linkedin_user_agent,
+            "accept-language": self._settings.linkedin_accept_language,
+            "cookie": f"li_at={session.li_at}; JSESSIONID=\"{session.jsessionid}\"",
         }
-        cookies = {"li_at": session.li_at, "JSESSIONID": session.jsessionid}
-        variables: dict[str, Any] = {"member_identity": slug}
-        body: dict[str, Any] = {"variables": variables}
-        if operation.query_id_env:
-            query_id = os.getenv(operation.query_id_env)
-            if not query_id:
-                raise UpstreamOperationDrift(
-                    operation.semantic_name, "The registered query identifier is unavailable."
-                )
-            body["queryId"] = query_id
+
+    def _page_headers(self) -> dict[str, str]:
+        session = self._session.load()
         return {
-            **headers,
-            "cookie": "; ".join(f"{key}={value}" for key, value in cookies.items()),
-        }, body
+            "accept": (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,"
+                "image/webp,*/*;q=0.8"
+            ),
+            "user-agent": self._settings.linkedin_user_agent,
+            "accept-language": self._settings.linkedin_accept_language,
+            "cookie": f"li_at={session.li_at}; JSESSIONID=\"{session.jsessionid}\"",
+        }
 
     async def execute(self, semantic_name: str, slug: str, request_id: str) -> OperationResult:
         operation = self._registry.get(semantic_name)
-        headers, body = self._request_parts(operation, slug)
+        if operation.kind is TransportKind.HTML:
+            return await self._execute_page(operation, slug, request_id)
+        return await self._execute_restli(operation, slug, request_id)
+
+    async def _execute_restli(
+        self, operation: Operation, slug: str, request_id: str
+    ) -> OperationResult:
+        """Try each registered decoration id until one yields a usable payload.
+
+        Decoration versions are LinkedIn-side template revisions that rotate; a
+        retired version answers 404/410 while a current one answers 200. Trying
+        the configured list in order keeps the contract self-healing without
+        guessing during a live request.
+        """
+        started = time.perf_counter()
         url = f"{UPSTREAM_ORIGIN}{operation.path}"
-        attempts = self._settings.app_upstream_retries + 1
-        for attempt in range(1, attempts + 1):
-            started = time.perf_counter()
+        last_error: UpstreamOperationDrift | None = None
+        attempts = 0
+        for decoration in operation.decoration_ids:
+            params = {
+                "q": "memberIdentity",
+                "memberIdentity": slug,
+                "decorationId": decoration,
+            }
+            result, error = await self._request_json(
+                operation, request_id, url, params, started, attempts
+            )
+            attempts += 1
+            if result is not None:
+                return result
+            assert error is not None
+            last_error = error if isinstance(error, UpstreamOperationDrift) else None
+            if last_error is None:
+                raise error
+        raise last_error or UpstreamOperationDrift(
+            operation.semantic_name, "Every registered decoration id was refused upstream."
+        )
+
+    async def _request_json(
+        self,
+        operation: Operation,
+        request_id: str,
+        url: str,
+        params: dict[str, str],
+        started: float,
+        attempts: int,
+    ) -> tuple[OperationResult | None, Exception | None]:
+        headers = self._api_headers()
+        retries = self._settings.app_upstream_retries
+        for attempt in range(1, retries + 2):
             try:
                 async with self._client.stream(
-                    operation.method,
-                    url,
-                    headers=headers,
-                    json=body if operation.method == "POST" else None,
-                    params=body if operation.method == "GET" else None,
+                    "GET", url, headers=headers, params=params
                 ) as response:
                     self.call_count += 1
                     duration = (time.perf_counter() - started) * 1000
-                    self._classify_status(response, operation.semantic_name)
                     if response.is_redirect:
-                        raise UpstreamOperationDrift(
-                            semantic_name, "Upstream redirects are refused."
-                        )
-                    media_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
-                    raw = await self._read_limited(response, semantic_name)
-                    if media_type not in _JSON_CONTENT_TYPES:
-                        lowered = raw[:4096].lower()
-                        if media_type == "text/html" and any(
-                            token in lowered
-                            for token in (b"checkpoint", b"security challenge", b"challenge")
-                        ):
+                        # LinkedIn redirects requests carrying an invalid or
+                        # expired li_at to the authwall; classify that as an
+                        # expired session rather than operation drift.
+                        location = response.headers.get("location", "")
+                        if "authwall" in location or "login" in location:
                             self._session.fail_closed()
-                            raise UpstreamChallenge()
+                            raise UpstreamAuthExpired()
                         raise UpstreamOperationDrift(
-                            semantic_name, "Upstream returned a non-JSON content type."
+                            operation.semantic_name, "Upstream redirects are refused."
+                        )
+                    if response.status_code != 404:
+                        self._classify_status(response, operation.semantic_name)
+                    media_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+                    raw = await self._read_limited(response, operation.semantic_name)
+                    if response.status_code == 404:
+                        if media_type in _JSON_CONTENT_TYPES:
+                            # A JSON 404 from a current decoration means the
+                            # profile itself is absent for this viewer.
+                            raise ProfileNotFound()
+                        return None, UpstreamOperationDrift(
+                            operation.semantic_name,
+                            "Decoration request answered 404 with an HTML error page.",
+                        )
+                    if media_type not in _JSON_CONTENT_TYPES:
+                        if media_type == "text/html":
+                            lowered = raw[:4096].lower()
+                            if b"checkpoint" in lowered or b"challenge" in lowered:
+                                self._session.fail_closed()
+                                raise UpstreamChallenge()
+                        # A retired decoration answers with an HTML error page.
+                        return None, UpstreamOperationDrift(
+                            operation.semantic_name,
+                            "Upstream answered a decoration request with non-JSON content.",
                         )
                     try:
                         payload = json.loads(raw)
-                    except json.JSONDecodeError as exc:
-                        raise UpstreamOperationDrift(
-                            semantic_name, "Upstream returned malformed JSON."
-                        ) from exc
-                    if not isinstance(payload, dict):
-                        raise UpstreamOperationDrift(
-                            semantic_name, "Upstream JSON root is not an object."
+                    except json.JSONDecodeError:
+                        # A malformed body means this decoration is not usable;
+                        # the next registered one may still answer correctly.
+                        return None, UpstreamOperationDrift(
+                            operation.semantic_name, "Upstream returned malformed JSON."
                         )
+                    if not isinstance(payload, dict):
+                        return None, UpstreamOperationDrift(
+                            operation.semantic_name, "Upstream JSON root is not an object."
+                        )
+                    status = payload.get("data", {})
+                    if isinstance(status, dict) and status.get("status") == 404:
+                        raise ProfileNotFound()
                     log_operation(
                         OperationEvent(
                             request_id,
-                            semantic_name,
+                            operation.semantic_name,
                             duration,
                             response.status_code,
                             "pending",
-                            attempt,
+                            attempt + attempts,
                         )
                     )
-                    return OperationResult(
-                        operation=semantic_name,
-                        payload=payload,
-                        duration_ms=duration,
-                        status_code=response.status_code,
+                    return (
+                        OperationResult(
+                            operation=operation.semantic_name,
+                            payload=payload,
+                            duration_ms=duration,
+                            status_code=response.status_code,
+                        ),
+                        None,
                     )
-            except httpx.TimeoutException as exc:
-                if attempt == attempts:
-                    raise UpstreamTimeout(semantic_name) from exc
-            except (httpx.ConnectError, httpx.ReadError) as exc:
-                if attempt == attempts:
-                    raise UpstreamTimeout(semantic_name) from exc
-            if attempt < attempts:
-                await asyncio.sleep(0.1 * attempt)
-        raise AssertionError("unreachable transport retry state")
+            except httpx.TimeoutException:
+                if attempt == retries + 1:
+                    return None, UpstreamTimeout(operation.semantic_name)
+                await asyncio.sleep(0.2 * attempt)
+            except (httpx.ConnectError, httpx.ReadError):
+                if attempt == retries + 1:
+                    return None, UpstreamTimeout(operation.semantic_name)
+                await asyncio.sleep(0.2 * attempt)
+            except UpstreamRateLimited as exc:
+                return None, exc
+        return None, UpstreamOperationDrift(operation.semantic_name, "Unreachable retry state.")
+
+    async def _execute_page(
+        self, operation: Operation, slug: str, request_id: str
+    ) -> OperationResult:
+        started = time.perf_counter()
+        url = f"{UPSTREAM_ORIGIN}/in/{slug}/"
+        headers = self._page_headers()
+        try:
+            response = await self._client.get(url, headers=headers, follow_redirects=False)
+        except httpx.TimeoutException as exc:
+            raise UpstreamTimeout(operation.semantic_name) from exc
+        self.call_count += 1
+        duration = (time.perf_counter() - started) * 1000
+        self._classify_page_status(response, operation.semantic_name)
+        content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+        if content_type != "text/html" or response.status_code != 200:
+            raise UpstreamOperationDrift(
+                operation.semantic_name,
+                "The profile page did not return an HTML document.",
+            )
+        if len(response.content) > self._settings.app_upstream_max_bytes:
+            raise UpstreamOperationDrift(
+                operation.semantic_name, "Upstream payload exceeded the configured size limit."
+            )
+        html = response.text
+        payload = extract_embedded_json(html)
+        if payload is None:
+            raise UpstreamOperationDrift(
+                operation.semantic_name,
+                "No embedded Voyager JSON document was found in the profile page.",
+            )
+        log_operation(
+            OperationEvent(
+                request_id, operation.semantic_name, duration, response.status_code, "pending", 1
+            )
+        )
+        return OperationResult(
+            operation=operation.semantic_name,
+            payload=payload,
+            duration_ms=duration,
+            status_code=response.status_code,
+        )
+
+    def _classify_page_status(self, response: httpx.Response, operation: str) -> None:
+        if response.is_redirect:
+            location = response.headers.get("location", "")
+            if "authwall" in location or "login" in location:
+                self._session.fail_closed()
+                raise UpstreamAuthExpired()
+            raise UpstreamOperationDrift(
+                operation, "Upstream redirects are refused."
+            )
+        if response.status_code == 999:
+            self._session.fail_closed()
+            raise UpstreamChallenge()
+        if response.status_code == 401:
+            self._session.fail_closed()
+            raise UpstreamAuthExpired()
+        if response.status_code == 403:
+            self._session.fail_closed()
+            raise UpstreamChallenge()
+        if response.status_code == 404:
+            raise ProfileNotFound()
+        if response.status_code == 429:
+            raise UpstreamRateLimited()
+        if response.status_code >= 500:
+            raise UpstreamTimeout(operation)
+        if response.status_code >= 300:
+            raise UpstreamOperationDrift(
+                operation, f"Unexpected page status class: {response.status_code // 100}xx"
+            )
 
     async def _read_limited(self, response: httpx.Response, operation: str) -> bytes:
         content_length = response.headers.get("content-length")
@@ -203,6 +398,8 @@ class LinkedInTransport:
             self._session.fail_closed()
             raise UpstreamChallenge()
         if response.status_code == 404:
+            # Only fatal once every decoration has been tried; callers treat this
+            # as a candidate-level signal inside _execute_restli.
             raise ProfileNotFound()
         if response.status_code == 429:
             raise UpstreamRateLimited()

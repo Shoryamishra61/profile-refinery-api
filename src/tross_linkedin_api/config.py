@@ -9,7 +9,6 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class AppMode(StrEnum):
-    FIXTURE = "fixture"
     LIVE = "live"
 
 
@@ -31,17 +30,25 @@ class Settings(BaseSettings):
     )
 
     app_api_keys: ApiKeys = Field(min_length=1)
-    app_mode: AppMode = AppMode.FIXTURE
+    app_mode: AppMode = AppMode.LIVE
     app_rate_limit_requests: int = Field(default=30, ge=1, le=10_000)
     app_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3_600)
     app_schema_path: Path = Path("schemas/profile-response.schema.json")
     app_operation_registry_path: Path = Path("config/operation_registry.yaml")
-    app_fixture_root: Path = Path("tests/fixtures/raw")
     app_upstream_timeout_seconds: float = Field(default=12.0, gt=0, le=60)
     app_upstream_max_bytes: int = Field(default=5_000_000, ge=1024, le=20_000_000)
     app_upstream_retries: int = Field(default=1, ge=0, le=2)
+    app_batch_max_urls: int = Field(default=200, ge=1, le=5_000)
+    app_batch_max_file_bytes: int = Field(default=5_242_880, ge=1024, le=52_428_800)
+    app_batch_concurrency: int = Field(default=3, ge=1, le=10)
+    app_batch_time_budget_seconds: float = Field(default=8.0, gt=0, le=30)
     linkedin_li_at: SecretStr | None = None
     linkedin_jsessionid: SecretStr | None = None
+    linkedin_user_agent: str = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    )
+    linkedin_accept_language: str = "en-US,en;q=0.9"
 
     @property
     def api_key_values(self) -> tuple[str, ...]:

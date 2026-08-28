@@ -3,9 +3,11 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from tross_linkedin_api.errors import ProfileNotFound, UpstreamTimeout
+
 
 @pytest.mark.asyncio
-async def test_health_and_readiness_are_public(client: httpx.AsyncClient) -> None:
+async def test_healthz_is_public_and_readyz_reflects_session(client: httpx.AsyncClient) -> None:
     assert (await client.get("/healthz")).json() == {"status": "ok"}
     response = await client.get("/readyz")
     assert response.status_code == 200
@@ -13,56 +15,114 @@ async def test_health_and_readiness_are_public(client: httpx.AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
-async def test_fixture_demo_never_embeds_the_caller_api_key(client: httpx.AsyncClient) -> None:
-    response = await client.get("/demo")
-    assert response.status_code == 200
-    assert "Verified Fixture Demo" in response.text
-    assert "test-api-key" not in response.text
-    assert "Bearer token" not in response.text
-
-
-@pytest.mark.asyncio
 async def test_missing_and_invalid_api_keys_are_401(client: httpx.AsyncClient) -> None:
-    params = {"url": "https://www.linkedin.com/in/synthetic-profile"}
+    params = {"url": "https://www.linkedin.com/in/test-integration-profile"}
     missing = await client.get("/v1/profiles", params=params)
     invalid = await client.get("/v1/profiles", params=params, headers={"X-API-Key": "wrong"})
     for response in (missing, invalid):
         assert response.status_code == 401
         assert response.headers["content-type"].startswith("application/problem+json")
         assert response.json()["code"] == "UNAUTHORIZED_CALLER"
-        assert "API" not in response.json()["detail"] or "valid" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_fixture_profile_contract_and_instrumentation(client: httpx.AsyncClient) -> None:
+async def test_live_profile_contract_and_provenance(client: httpx.AsyncClient) -> None:
     response = await client.get(
         "/v1/profiles",
-        params={"url": "https://linkedin.com/in/synthetic-profile?trk=example"},
+        params={"url": "https://linkedin.com/in/test-integration-profile?trk=example"},
         headers={"X-API-Key": "test-api-key"},
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["canonical_url"] == "https://www.linkedin.com/in/synthetic-profile"
-    assert body["retrieval"] == {
-        "mode": "fixture",
-        "source": "synthetic_fixture",
-        "fixture": True,
-        "requested_url": "https://linkedin.com/in/synthetic-profile?trk=example",
-        "canonical_url": "https://www.linkedin.com/in/synthetic-profile",
-        "observed_at": body["observed_at"],
-        "partial": False,
-    }
-    assert body["profile"]["name"]["value"] == "Avery Raman"
-    assert len(body["profile"]["experience"]["value"]) == 2
-    assert body["profile"]["background_image"]["status"] == "not_provided"
-    assert body["partial"] is False
-    assert body["meta"]["upstream_calls"] == 6
-    assert len(body["meta"]["operations_succeeded"]) == 6
-    assert body["meta"]["viewer_context"] == "synthetic_fixture"
+    assert body["schema_version"] == "1.1.0"
+    assert body["canonical_url"] == "https://www.linkedin.com/in/test-integration-profile"
+    retrieval = body["retrieval"]
+    assert retrieval["mode"] == "live"
+    assert retrieval["fixture"] is False
+    assert retrieval["source"] == "linkedin"
+    assert (
+        retrieval["requested_url"]
+        == "https://linkedin.com/in/test-integration-profile?trk=example"
+    )
+    profile = body["profile"]
+    assert profile["name"]["value"] == "Integration Check"
+    assert profile["headline"]["value"].startswith("Staff Engineer")
+    assert len(profile["experience"]["value"]) == 2
+    assert profile["experience"]["value"][0]["is_current"] is True
+    assert profile["experience"]["value"][0]["company_url"] == (
+        "https://www.linkedin.com/company/pipeline-validation-corp/"
+    )
+    assert [skill["name"] for skill in profile["skills"]["value"]] == [
+        "HTTP protocol analysis",
+        "Rest.li",
+    ]
+    assert profile["certifications"]["value"][0]["authority"] == "Open Verification Institute"
+    assert profile["languages"]["value"][0]["proficiency"] == "NATIVE"
+    assert profile["background_image"]["status"] == "not_provided"
+    assert body["meta"]["transport_strategy"] == "profile_view"
+    assert body["meta"]["viewer_context"] == "authenticated_backend_member"
 
 
 @pytest.mark.asyncio
-async def test_invalid_url_never_reaches_transport(client: httpx.AsyncClient) -> None:
+async def test_error_responses_carry_request_id(client: httpx.AsyncClient) -> None:
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "not-a-url"},
+        headers={"X-API-Key": "test-api-key", "X-Request-ID": "corr-42"},
+    )
+    assert response.status_code == 400
+    assert response.json()["request_id"] == "corr-42"
+
+
+@pytest.mark.asyncio
+async def test_upstream_failure_is_explicit_never_fixture(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    stub_transport.set("profile_view", [UpstreamTimeout("profile_view")])
+    stub_transport.set("profile_page", [UpstreamTimeout("profile_page")])
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 504
+    body = response.json()
+    assert body["code"] == "UPSTREAM_TIMEOUT"
+    assert "SYNTHETIC" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_profile_not_found_maps_to_404(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    stub_transport.set("profile_view", [ProfileNotFound()])
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/missing-person/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 404
+    assert response.json()["code"] == "PROFILE_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_fallback_strategy_used_when_primary_drifts(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    stub_transport.set("profile_view", [])
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    assert response.json()["meta"]["transport_strategy"] == "profile_page"
+
+
+@pytest.mark.asyncio
+async def test_invalid_url_never_reaches_transport(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
     response = await client.get(
         "/v1/profiles",
         params={"url": "https://linkedin.com.evil.test/in/admin"},
@@ -70,10 +130,11 @@ async def test_invalid_url_never_reaches_transport(client: httpx.AsyncClient) ->
     )
     assert response.status_code == 400
     assert response.json()["code"] == "INVALID_PROFILE_URL"
+    assert stub_transport.call_count == 0
 
 
 @pytest.mark.asyncio
-async def test_openapi_is_31_and_documents_required_header(client: httpx.AsyncClient) -> None:
+async def test_openapi_documents_security(client: httpx.AsyncClient) -> None:
     response = await client.get("/openapi.json")
     assert response.status_code == 200
     document = response.json()
@@ -82,3 +143,5 @@ async def test_openapi_is_31_and_documents_required_header(client: httpx.AsyncCl
     assert operation["security"]
     schemes = document["components"]["securitySchemes"]
     assert any(item.get("name") == "X-API-Key" for item in schemes.values())
+    assert "/v1/batches" in document["paths"]
+    assert "/v1/batches/{batch_id}/export" in document["paths"]

@@ -88,8 +88,12 @@ def parse_core(payload: dict[str, Any]) -> dict[str, Any]:
     location = profile.get("geoLocationName") or profile.get("locationName")
     if isinstance(location, dict):
         location = _localized(location)
+    public_identifier = profile.get("publicIdentifier")
     return {
-        "identity": {"member_urn": profile.get("entityUrn")},
+        "identity": {
+            "member_urn": profile.get("entityUrn"),
+            "public_identifier": public_identifier if isinstance(public_identifier, str) else None,
+        },
         "name": name,
         "headline": _localized(profile.get("headline")),
         "location": location if isinstance(location, str) else None,
@@ -113,6 +117,9 @@ def parse_experience(payload: dict[str, Any]) -> list[dict[str, Any]]:
         company_urn = item.get("companyUrn") or item.get("*company")
         company = companies.get(str(company_urn), {})
         period = item.get("timePeriod") or item.get("dateRange") or {}
+        start = _date(period.get("startDate") or period.get("start"))
+        end = _date(period.get("endDate") or period.get("end"))
+        universal_name = company.get("universalName") or company.get("universal-name")
         output.append(
             {
                 "id": item.get("entityUrn"),
@@ -120,8 +127,14 @@ def parse_experience(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "company_name": _localized(item.get("companyName"))
                 or _localized(company.get("name")),
                 "company_urn": company_urn,
-                "start_date": _date(period.get("startDate") or period.get("start")),
-                "end_date": _date(period.get("endDate") or period.get("end")),
+                "company_url": (
+                    f"https://www.linkedin.com/company/{universal_name}/"
+                    if isinstance(universal_name, str) and universal_name
+                    else None
+                ),
+                "start_date": start,
+                "end_date": end,
+                "is_current": start is not None and end is None,
                 "location": _localized(item.get("locationName")),
                 "description": _localized(item.get("description")),
                 "group_id": item.get("multiLocaleCompanyNameInfo", {}).get("groupId")
@@ -166,19 +179,30 @@ def parse_skills(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def parse_certifications(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    entities = _entities(payload)
+    organizations = {
+        str(item.get("entityUrn")): item
+        for item in entities
+        if (_type(item).endswith(".organization") or _type(item).endswith(".company"))
+        and item.get("entityUrn")
+    }
     output = []
-    for item in _entities(payload):
+    for item in entities:
         if not _type(item).endswith(".certification"):
             continue
         name = _localized(item.get("name"))
         if not name:
             continue
         period = item.get("timePeriod") or {}
+        authority = _localized(item.get("authority"))
+        if not authority:
+            issuer = organizations.get(str(item.get("*authority")), {})
+            authority = _localized(issuer.get("name"))
         output.append(
             {
                 "id": item.get("entityUrn"),
                 "name": name,
-                "authority": _localized(item.get("authority")),
+                "authority": authority,
                 "license_number": item.get("licenseNumber"),
                 "start_date": _date(period.get("startDate")),
                 "end_date": _date(period.get("endDate")),
@@ -196,6 +220,23 @@ def parse_languages(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return output
 
 
+def parse_full_profile(payload: dict[str, Any]) -> dict[str, Any]:
+    """Extract the core identity and every section from one profile payload.
+
+    Both the dash profileView resource and the embedded page JSON return a
+    single entity graph, so all sections are derived from the same response —
+    the minimal request set LinkedIn itself requires.
+    """
+    return {
+        "core": parse_core(payload),
+        "experience": parse_experience(payload),
+        "education": parse_education(payload),
+        "skills": parse_skills(payload),
+        "certifications": parse_certifications(payload),
+        "languages": parse_languages(payload),
+    }
+
+
 PARSERS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "profile_core_v1": parse_core,
     "experience_v1": parse_experience,
@@ -203,6 +244,7 @@ PARSERS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "skills_v1": parse_skills,
     "certifications_v1": parse_certifications,
     "languages_v1": parse_languages,
+    "full_profile_v1": parse_full_profile,
 }
 
 

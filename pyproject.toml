@@ -14,10 +14,14 @@ dependencies = [
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
   "jsonschema[format]>=4.25,<5",
+  "openpyxl>=3.1,<4",
   "pydantic>=2.11,<3",
   "pydantic-settings>=2.10,<3",
+  "defusedxml>=0.7,<1",
+  "pypdf>=5.0,<7",
   "PyYAML>=6.0.2,<7",
   "uvicorn[standard]>=0.35,<1",
+  "python-multipart>=0.0.20,<1",
 ]
 
 [project.optional-dependencies]
@@ -33,7 +37,6 @@ dev = [
 ]
 
 [project.scripts]
-tross-benchmark = "tross_linkedin_api.benchmark:main"
 
 [tool.vercel]
 entrypoint = "src.tross_linkedin_api.main:app"
@@ -60,3 +63,7 @@ python_version = "3.12"
 strict = true
 files = ["src/tross_linkedin_api"]
 exclude = ["11_ARCHIVE_ORIGINALS"]
+
+[[tool.mypy.overrides]]
+module = ["defusedxml.*", "pypdf.*"]
+ignore_missing_imports = true

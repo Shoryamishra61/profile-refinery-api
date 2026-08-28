@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
@@ -8,15 +7,18 @@ from pathlib import Path, PurePosixPath
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from .config import AppMode
-
 
 class EvidenceStatus(StrEnum):
     LIVE_VERIFIED = "live_verified"
-    FIXTURE_VERIFIED = "fixture_verified"
     HISTORICAL = "historical"
+    FIXTURE_VERIFIED = "fixture_verified"
     DISABLED = "disabled"
     UNKNOWN = "unknown"
+
+
+class TransportKind(StrEnum):
+    RESTLI = "restli"
+    HTML = "html"
 
 
 class Operation(BaseModel):
@@ -25,14 +27,13 @@ class Operation(BaseModel):
     semantic_name: str
     enabled: bool
     evidence_status: EvidenceStatus
+    kind: TransportKind = TransportKind.RESTLI
     method: str
     path: str
     transport_family: str
-    query_id_env: str | None = None
-    input_variables: list[str]
     parser: str
+    decoration_ids: list[str] = Field(default_factory=list)
     observed_at: datetime | None = None
-    viewer_context: str
     fixture: str | None = None
     evidence_reference: str
 
@@ -45,6 +46,8 @@ class Operation(BaseModel):
             raise ValueError("operation path must be an absolute safe LinkedIn path")
         if self.enabled and not self.parser:
             raise ValueError("enabled operations require a parser")
+        if self.kind is TransportKind.RESTLI and self.enabled and not self.decoration_ids:
+            raise ValueError("enabled restli operations require at least one decoration id")
         return self
 
 
@@ -55,7 +58,16 @@ class RegistryDocument(BaseModel):
 
 
 class OperationRegistry:
-    def __init__(self, document: RegistryDocument, mode: AppMode) -> None:
+    """Config-driven description of the direct HTTP operations used against LinkedIn.
+
+    An operation may serve live traffic in one of two evidence states: LIVE_VERIFIED
+    (validated against a real authenticated session) or HISTORICAL (documented,
+    community-corroborated protocol shape that has not yet been re-verified live).
+    Anything else is unusable, which keeps the system fail-closed against
+    unverified endpoint guesses.
+    """
+
+    def __init__(self, document: RegistryDocument) -> None:
         self.version = document.version
         self._operations = {operation.semantic_name: operation for operation in document.operations}
         self._active_names: set[str] = set()
@@ -64,27 +76,19 @@ class OperationRegistry:
         for operation in document.operations:
             if not operation.enabled:
                 continue
-            allowed = (
-                operation.evidence_status is EvidenceStatus.LIVE_VERIFIED
-                if mode is AppMode.LIVE
-                else operation.evidence_status is EvidenceStatus.FIXTURE_VERIFIED
-            )
-            if not allowed:
+            if operation.evidence_status not in {
+                EvidenceStatus.LIVE_VERIFIED,
+                EvidenceStatus.HISTORICAL,
+            }:
                 continue
-            if not operation.observed_at or not operation.fixture:
+            if not operation.observed_at:
                 raise ValueError(
                     f"{operation.semantic_name}: enabled operation lacks observation metadata"
                 )
-            if (
-                mode is AppMode.LIVE
-                and operation.query_id_env
-                and not os.getenv(operation.query_id_env)
-            ):
-                raise ValueError(f"{operation.semantic_name}: missing {operation.query_id_env}")
             self._active_names.add(operation.semantic_name)
 
     @classmethod
-    def load(cls, path: Path, mode: AppMode) -> OperationRegistry:
+    def load(cls, path: Path) -> OperationRegistry:
         if not path.is_file():
             raise FileNotFoundError(f"operation registry is required: {path}")
         try:
@@ -92,7 +96,7 @@ class OperationRegistry:
             document = RegistryDocument.model_validate(raw)
         except (OSError, yaml.YAMLError, ValidationError) as exc:
             raise ValueError(f"invalid operation registry: {path}") from exc
-        return cls(document, mode)
+        return cls(document)
 
     def get(self, semantic_name: str) -> Operation:
         try:

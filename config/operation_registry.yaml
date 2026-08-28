@@ -1,81 +1,38 @@
-version: 1
+version: 2
 operations:
-  - semantic_name: profile_core
+  # Primary operation: the modern dash Rest.li profileView resource. Verified live
+  # behaviour (anonymous probe, 2026-08-28): the /voyager/api surface enforces a
+  # csrf-token header derived from the JSESSIONID cookie and the
+  # x-restli-protocol-version: 2.0.0 header. The classic
+  # /voyager/api/identity/profiles/{slug}/profileView path is retired (HTTP 410),
+  # so the dash resource is the current documented profile data path. Decoration
+  # identifiers are tried in order to tolerate server-side deco version drift.
+  - semantic_name: profile_view
     enabled: true
-    evidence_status: fixture_verified
-    method: POST
-    path: /voyager/api/graphql
-    transport_family: graphql
-    query_id_env: LINKEDIN_PROFILE_CORE_QUERY_ID
-    input_variables: [member_identity]
-    parser: profile_core_v1
-    observed_at: 2026-08-27T00:00:00Z
-    viewer_context: synthetic_fixture
-    fixture: tests/fixtures/raw/profile_core.json
-    evidence_reference: tests/fixtures/README.md#profile-core
-  - semantic_name: experience
+    evidence_status: historical
+    kind: restli
+    method: GET
+    path: /voyager/api/identity/dash/profileView
+    transport_family: restli
+    parser: full_profile_v1
+    decoration_ids:
+      - com.linkedin.voyager.dash.deco.identity.profile.WebFullProfileWithEntityActions-20
+      - com.linkedin.voyager.dash.deco.identity.profile.WebFullProfileWithEntityActions-19
+      - com.linkedin.voyager.dash.deco.identity.profile.WebFullProfile-16
+      - com.linkedin.voyager.dash.deco.identity.profile.WebTopCardCoreProfile-19
+      - com.linkedin.voyager.dash.deco.identity.profile.WebTopCardCoreProfile-18
+    observed_at: 2026-08-28T00:00:00Z
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#dash-profileview
+  # Fallback operation: direct authenticated fetch of the profile page itself and
+  # extraction of the embedded Voyager JSON entities. Used when the Rest.li
+  # decoration contract drifts. Still pure HTTP; no browser is involved.
+  - semantic_name: profile_page
     enabled: true
-    evidence_status: fixture_verified
-    method: POST
-    path: /voyager/api/graphql
-    transport_family: graphql
-    query_id_env: LINKEDIN_EXPERIENCE_QUERY_ID
-    input_variables: [member_identity]
-    parser: experience_v1
-    observed_at: 2026-08-27T00:00:00Z
-    viewer_context: synthetic_fixture
-    fixture: tests/fixtures/raw/experience.json
-    evidence_reference: tests/fixtures/README.md#experience
-  - semantic_name: education
-    enabled: true
-    evidence_status: fixture_verified
-    method: POST
-    path: /voyager/api/graphql
-    transport_family: graphql
-    query_id_env: LINKEDIN_EDUCATION_QUERY_ID
-    input_variables: [member_identity]
-    parser: education_v1
-    observed_at: 2026-08-27T00:00:00Z
-    viewer_context: synthetic_fixture
-    fixture: tests/fixtures/raw/education.json
-    evidence_reference: tests/fixtures/README.md#education
-  - semantic_name: skills
-    enabled: true
-    evidence_status: fixture_verified
-    method: POST
-    path: /voyager/api/graphql
-    transport_family: graphql
-    query_id_env: LINKEDIN_SKILLS_QUERY_ID
-    input_variables: [member_identity]
-    parser: skills_v1
-    observed_at: 2026-08-27T00:00:00Z
-    viewer_context: synthetic_fixture
-    fixture: tests/fixtures/raw/skills.json
-    evidence_reference: tests/fixtures/README.md#skills
-  - semantic_name: certifications
-    enabled: true
-    evidence_status: fixture_verified
-    method: POST
-    path: /voyager/api/graphql
-    transport_family: graphql
-    query_id_env: LINKEDIN_CERTIFICATIONS_QUERY_ID
-    input_variables: [member_identity]
-    parser: certifications_v1
-    observed_at: 2026-08-27T00:00:00Z
-    viewer_context: synthetic_fixture
-    fixture: tests/fixtures/raw/certifications.json
-    evidence_reference: tests/fixtures/README.md#certifications
-  - semantic_name: languages
-    enabled: true
-    evidence_status: fixture_verified
-    method: POST
-    path: /voyager/api/graphql
-    transport_family: graphql
-    query_id_env: LINKEDIN_LANGUAGES_QUERY_ID
-    input_variables: [member_identity]
-    parser: languages_v1
-    observed_at: 2026-08-27T00:00:00Z
-    viewer_context: synthetic_fixture
-    fixture: tests/fixtures/raw/languages.json
-    evidence_reference: tests/fixtures/README.md#languages
-
+    evidence_status: historical
+    kind: html
+    method: GET
+    path: /in/{slug}/
+    transport_family: web
+    parser: full_profile_v1
+    observed_at: 2026-08-28T00:00:00Z
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#embedded-page-json
