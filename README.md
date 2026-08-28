@@ -111,6 +111,27 @@ Module boundaries (`src/tross_linkedin_api/`):
 | `operation_registry.py` | Config-driven, evidence-gated endpoint definitions |
 | `validation.py` | JSON-Schema validation of every emitted response |
 
+## Production architecture (control plane)
+
+Full detail: `ARCHITECTURE.md` and `docs/adr-0001..0006`. Summary of the upstream
+control plane — every LinkedIn request flows through one governed subsystem:
+
+| Control | Mechanism | Default | Proof |
+|---|---|---|---|
+| Rate budget | token bucket (burst 4, refill 12/min) | `APP_UPSTREAM_BUCKET_CAPACITY`, `APP_UPSTREAM_REFILL_PER_MINUTE` | `test_rate_budget_throttles_burst` |
+| Bounded concurrency | semaphore around every operation | `APP_UPSTREAM_CONCURRENCY=2` | `test_backpressure_hundred_jobs_two_concurrent` (max 2 observed under 100 jobs) |
+| Retry budget | single layer in the governor, 1 retry, jittered exponential backoff; deterministic failures never retry | `APP_UPSTREAM_RETRIES=1` | `test_retry_containment_thirty_failures` (30 failures ⇒ exactly 120 calls, ceiling 120) |
+| Circuit breaker | challenge ⇒ immediate OPEN; threshold failures ⇒ OPEN; zero upstream traffic while open; one HALF_OPEN probe after cooldown | `APP_BREAKER_*` | `test_circuit_breaker_opens_recovers_via_single_probe`, `test_half_open_probe_failure_reopens_breaker` |
+| Durable jobs | JSON journal, atomic writes, restore on start; deterministic job ids | `APP_STORE_DIR` | `test_durable_jobs_survive_restart` |
+| Idempotency | `sha256(canonical_url|parser_version)` job identity; `Idempotency-Key` on batch creation | — | resilience suite |
+| Request coalescing | one in-flight extraction per job id; duplicates share the result | — | `test_request_coalescing_duplicate_profiles` |
+| Failure isolation | extraction failure never takes down ingestion/exports/health | — | resilience suite runs exports against failing upstreams |
+| Observability | `/metrics` (Prometheus), `/readyz` + `extraction_capability`, `/v1/capability` | — | production smoke tests |
+
+Workload model: **one upstream request per profile** (the dash/profiles member
+finder returns the full entity graph), so a 30-profile batch costs ~30 upstream
+requests after deduplication — the retired design needed six per profile.
+
 ## Why no browser is used
 
 The Tross clarification requires a purely reverse-engineered, direct-HTTP solution.
