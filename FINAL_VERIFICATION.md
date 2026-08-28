@@ -98,3 +98,41 @@ batch state is per-instance on serverless; no attempt is made to defeat challeng
 tree for `li_at`/`JSESSIONID`-shaped values found only placeholder references in
 code/docs. The production `APP_API_KEYS` value lives only in Vercel's secret store;
 the repository contains no credentials.
+
+## Architecture verification (2026-08-28, second pass)
+
+The extraction subsystem was rebuilt around the upstream control plane after the
+challenge incident demonstrated that one personal session is a scarce, fragile
+resource. Full design: `ARCHITECTURE.md`; decisions: `docs/adr-0001..0006`.
+
+### Controlled proofs (fake upstream, zero LinkedIn traffic — 96 tests total)
+
+| Guarantee | Proof | Measured result |
+|---|---|---|
+| Bounded concurrency | `test_backpressure_hundred_jobs_two_concurrent` | 100 jobs, `max_active ≤ 2`, exactly 100 upstream calls, 100 succeeded |
+| Retry containment | `test_retry_containment_thirty_failures` | 30 failing jobs ⇒ exactly 120 upstream calls (ceiling 30×2×2=120); no storm |
+| Circuit breaker | `test_circuit_breaker_opens_recovers_via_single_probe` | challenge ⇒ OPEN (0 upstream calls while open) ⇒ cooldown ⇒ single probe ⇒ CLOSED |
+| Half-open failure | `test_half_open_probe_failure_reopens_breaker` | failed probe ⇒ OPEN again |
+| Challenge ≠ session death | `test_challenge_breaker_recovery_keeps_session_configured` | breaker recovers extraction automatically, session stays configured |
+| Durable jobs | `test_durable_jobs_survive_restart` | batch resumed by a fresh process; completed jobs never re-extracted |
+| Request coalescing | `test_request_coalescing_duplicate_profiles` | duplicate batches share one extraction |
+| Rate budget | `test_rate_budget_throttles_burst` | measured wall-clock pacing (8 requests throttled by 2/s refill) |
+| Backpressure responsiveness | resilience suite | API, exports and journal reads stay healthy while upstream is failing |
+
+### Production evidence
+
+| Check | Observed |
+|---|---|
+| `GET /readyz` with session configured | 200 with `extraction_capability.state` (CLOSED/OPEN/… separated from readiness) |
+| `GET /metrics` | Prometheus counters/gauges: breaker state, queue depth/age, jobs, retries |
+| `GET /v1/capability` | full control-plane state (breaker, governor counters, queue) |
+| Real extraction A/B/C/A + paced 30-profile acceptance | **pending session recovery** — the owned session is currently soft-challenged by LinkedIn; the deployed breaker probes once per cooldown and will complete these runs automatically when the flag clears (scripts/production_differential.py, scripts/acceptance_run.py). A fresh login (log out/in, replace `LINKEDIN_LI_AT`+`LINKEDIN_JSESSIONID`) clears it immediately. |
+
+### Session challenge incident record
+
+* Trigger: ~20 rapid scripted probes of the dash API (pre-architecture diagnosis).
+* Upstream response: same-URL 302 with `li_at=delete me` cookie clearing; persists
+  for scripted calls for 1h+ regardless of pacing, fresh `JSESSIONID`, or full
+  companion-cookie context.
+* Architectural response: rate budget + breaker so this can never recur by
+  construction; recovery is automatic via the cooldown probe; no evasion attempted.
