@@ -37,8 +37,11 @@ def test_project_registry_enables_both_live_operations() -> None:
     registry = OperationRegistry.load(REGISTRY)
     assert set(registry.enabled_names()) == {
         "profile_view",
-        "profile_view_full",
-        "profile_sections",
+        "profile_experience",
+        "profile_education",
+        "profile_skills",
+        "profile_certifications",
+        "profile_languages",
         "profile_page",
     }
 

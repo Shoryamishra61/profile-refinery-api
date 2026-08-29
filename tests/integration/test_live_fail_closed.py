@@ -83,6 +83,7 @@ class _SentinelTransport:
         from tross_linkedin_api.models import OperationResult
 
         payload = {
+            "data": {"*elements": ["urn:li:fsd_profile:SYNTHETIC-001"]},
             "included": [
                 {
                     "$type": "com.linkedin.voyager.dash.identity.profile.Profile",
@@ -90,7 +91,7 @@ class _SentinelTransport:
                     "firstName": {"localized": {"en_US": "Synthetic"}},
                     "lastName": {"localized": {"en_US": "Sentinel"}},
                 }
-            ]
+            ],
         }
         return OperationResult(
             operation=semantic_name, payload=payload, duration_ms=1.0, status_code=200

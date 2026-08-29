@@ -12,6 +12,7 @@ class EvidenceStatus(StrEnum):
     LIVE_VERIFIED = "live_verified"
     HISTORICAL = "historical"
     FIXTURE_VERIFIED = "fixture_verified"
+    UNVERIFIED = "unverified"
     DISABLED = "disabled"
     UNKNOWN = "unknown"
 

@@ -101,6 +101,8 @@ class Media(StrictModel):
 
 class Profile(StrictModel):
     identity: ProfileField[Identity]
+    first_name: ProfileField[str]
+    last_name: ProfileField[str]
     name: ProfileField[str]
     headline: ProfileField[str]
     location: ProfileField[str]
@@ -122,6 +124,7 @@ class ResponseMeta(StrictModel):
     upstream_calls: int = Field(ge=0)
     upstream_latency_ms: float = Field(ge=0)
     warnings: list[str]
+    coverage: dict[str, str] = Field(default_factory=dict)
 
 
 class Retrieval(StrictModel):
@@ -135,7 +138,7 @@ class Retrieval(StrictModel):
 
 
 class ProfileResponse(StrictModel):
-    schema_version: str = "1.1.0"
+    schema_version: str = "1.2.0"
     input_url: str
     canonical_url: str
     observed_at: datetime

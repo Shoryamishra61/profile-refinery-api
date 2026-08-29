@@ -1,11 +1,41 @@
+"""Upstream shape → typed internal dicts.
+
+Parsers consume a :class:`~tross_linkedin_api.graph.NormalizedGraph` and never
+perform I/O (invariant I1/I3). Entity ownership is decided by the graph —
+target-reference traversal for profile payloads, root-reference traversal for
+section (profileCards) payloads — never by global ``$type`` scans of
+``included[]``.
+
+Text normalization handles the observed shapes:
+
+* plain string
+* localized wrapper ``{"localized": {"en_US": ...}}``
+* attributed wrapper ``{"text": ...}``
+
+Unknown complex objects yield ``None`` plus a warning at the orchestrator
+layer — never ``str(dict)`` in user-visible content.
+"""
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from typing import Any
 
 from .errors import UpstreamOperationDrift
+from .graph import (
+    AmbiguousTargetProfile,
+    NormalizedGraph,
+    TargetProfileMissing,
+)
 
-PARSER_VERSION = "normalized-entities-v1"
+PARSER_VERSION = "normalized-graph-v2"
+
+SECTION_ENTITY_SUFFIXES = {
+    "experience": ".position",
+    "education": ".education",
+    "skills": ".skill",
+    "certifications": ".certification",
+    "languages": ".language",
+}
 
 
 def _objects(value: Any) -> Iterable[dict[str, Any]]:
@@ -16,21 +46,6 @@ def _objects(value: Any) -> Iterable[dict[str, Any]]:
     elif isinstance(value, list):
         for child in value:
             yield from _objects(child)
-
-
-def _entities(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    included = payload.get("included", [])
-    if not isinstance(included, list):
-        raise ValueError("included must be an array")
-    entities = [item for item in included if isinstance(item, dict)]
-    for candidate in _objects(payload.get("data", {})):
-        if candidate.get("entityUrn") and candidate not in entities:
-            entities.append(candidate)
-    return entities
-
-
-def _type(entity: dict[str, Any]) -> str:
-    return str(entity.get("$type", "")).lower()
 
 
 def _localized(value: Any) -> str | None:
@@ -62,9 +77,11 @@ def _date(value: Any) -> dict[str, int] | None:
 def _media(value: Any) -> dict[str, Any] | None:
     """Extract the largest usable image from dash/legacy media shapes.
 
-    Real dash shapes seen live: profilePicture.displayImage.vectorImage and
-    backgroundPictures: [{...vectorImage...}] (a list). Legacy shapes expose
-    ready-made downloadUrl nodes. Both handled by scanning the nested objects.
+    Real dash shape (live-verified): profilePicture.displayImage.vectorImage
+    with artifacts carrying fileIdentifyingUrlPathSegment plus a
+    digitalmediaAsset urn; the public CDN url is
+    https://media.licdn.com/dms/image/v2/{assetId}/{pathSegment}. Legacy
+    fixtures expose ready-made downloadUrl nodes; both supported.
     """
     best_width = -1
     best_built: dict[str, Any] | None = None
@@ -103,43 +120,86 @@ def _media(value: Any) -> dict[str, Any] | None:
     return best_built
 
 
-def parse_core(payload: dict[str, Any]) -> dict[str, Any]:
-    entities = _entities(payload)
-    profile = next((item for item in entities if _type(item).endswith(".profile")), None)
-    if profile is None:
-        raise ValueError("profile entity not found")
+def _owned_entities(graph: NormalizedGraph, suffix: str) -> list[dict[str, Any]]:
+    """Entities of ``suffix`` owned by the target, by graph references only.
+
+    Profile payloads: entities reachable from the target profile (transitive
+    through groups). Section payloads: entities referenced from the response
+    root. A decorated payload may use both channels; results are de-duplicated
+    by URN with stable order.
+    """
+    owned: dict[str, dict[str, Any]] = {}
+    try:
+        target = graph.target_profile()
+    except (TargetProfileMissing, AmbiguousTargetProfile):
+        # Section payloads reference their section entities from the root and
+        # have no target Profile; the root-collection channel owns them.
+        target = None
+    if target is not None:
+        for entity in graph.collection_elements(target):
+            if _entity_type(entity).lower().endswith(suffix):
+                urn = entity.get("entityUrn")
+                if isinstance(urn, str):
+                    owned[urn] = entity
+    for entity in graph.root_collection(suffix):
+        urn = entity.get("entityUrn")
+        if isinstance(urn, str):
+            owned.setdefault(urn, entity)
+    return list(owned.values())
+
+
+def _entity_type(entity: dict[str, Any]) -> str:
+    kind = entity.get("$type")
+    return kind if isinstance(kind, str) else ""
+
+
+# -- core --------------------------------------------------------------------
+
+
+def parse_core(graph: NormalizedGraph) -> dict[str, Any]:
+    profile = graph.target_profile()
     first = _localized(profile.get("firstName"))
     last = _localized(profile.get("lastName"))
-    name = " ".join(part for part in (first, last) if part) or _localized(profile.get("name"))
-    location = profile.get("geoLocationName") or profile.get("locationName")
-    if isinstance(location, dict):
-        location = _localized(location)
-    public_identifier = profile.get("publicIdentifier")
+    full = " ".join(part for part in (first, last) if part) or _localized(profile.get("fullName"))
+    member_urn = profile.get("entityUrn")
+    location = _localized(profile.get("locationName")) or _localized(
+        profile.get("geoLocationName")
+    )
     return {
         "identity": {
-            "member_urn": profile.get("entityUrn"),
-            "public_identifier": public_identifier if isinstance(public_identifier, str) else None,
+            "member_urn": member_urn if isinstance(member_urn, str) else None,
+            "public_identifier": _public_identifier(profile),
         },
-        "name": name,
+        "first_name": first,
+        "last_name": last,
+        "name": full,
         "headline": _localized(profile.get("headline")),
-        "location": location if isinstance(location, str) else None,
+        "location": location,
         "about": _localized(profile.get("summary")),
         "profile_image": _media(profile.get("profilePicture")),
-        "background_image": _media(profile.get("backgroundPicture")),
+        "background_image": _media(
+            profile.get("backgroundPicture") or profile.get("backgroundPictures")
+        ),
+        "unknown_entity_types": graph.unknown_entity_types(),
     }
 
 
-def parse_experience(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    entities = _entities(payload)
+def _public_identifier(profile: dict[str, Any]) -> str | None:
+    value = profile.get("publicIdentifier")
+    return value if isinstance(value, str) else None
+
+
+# -- sections ----------------------------------------------------------------
+
+
+def parse_experience(graph: NormalizedGraph) -> list[dict[str, Any]]:
     companies = {
-        str(item.get("entityUrn")): item
-        for item in entities
-        if _type(item).endswith(".company") and item.get("entityUrn")
+        str(e.get("entityUrn")): e
+        for e in _owned_entities(graph, ".company") + _owned_entities(graph, ".organization")
+        if e.get("entityUrn")
     }
     output = []
-    for item in entities:
-        if not _type(item).endswith(".position"):
-            continue
+    for item in _owned_entities(graph, ".position"):
         company_urn = item.get("companyUrn") or item.get("*company")
         company = companies.get(str(company_urn), {})
         period = item.get("timePeriod") or item.get("dateRange") or {}
@@ -152,7 +212,7 @@ def parse_experience(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "title": _localized(item.get("title")),
                 "company_name": _localized(item.get("companyName"))
                 or _localized(company.get("name")),
-                "company_urn": company_urn,
+                "company_urn": company_urn if isinstance(company_urn, str) else None,
                 "company_url": (
                     f"https://www.linkedin.com/company/{universal_name}/"
                     if isinstance(universal_name, str) and universal_name
@@ -163,19 +223,14 @@ def parse_experience(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "is_current": start is not None and end is None,
                 "location": _localized(item.get("locationName")),
                 "description": _localized(item.get("description")),
-                "group_id": item.get("multiLocaleCompanyNameInfo", {}).get("groupId")
-                if isinstance(item.get("multiLocaleCompanyNameInfo"), dict)
-                else None,
             }
         )
     return output
 
 
-def parse_education(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def parse_education(graph: NormalizedGraph) -> list[dict[str, Any]]:
     output = []
-    for item in _entities(payload):
-        if not _type(item).endswith(".education"):
-            continue
+    for item in _owned_entities(graph, ".education"):
         period = item.get("timePeriod") or item.get("dateRange") or {}
         output.append(
             {
@@ -192,30 +247,31 @@ def parse_education(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return output
 
 
-def _parse_named(payload: dict[str, Any], suffix: str) -> list[dict[str, Any]]:
-    return [
-        {"id": item.get("entityUrn"), "name": _localized(item.get("name"))}
-        for item in _entities(payload)
-        if _type(item).endswith(suffix) and _localized(item.get("name"))
-    ]
+def parse_skills(graph: NormalizedGraph) -> list[dict[str, Any]]:
+    return _named_owned(graph, ".skill")
 
 
-def parse_skills(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    return _parse_named(payload, ".skill")
+def parse_languages(graph: NormalizedGraph) -> list[dict[str, Any]]:
+    by_urn = {str(e.get("entityUrn")): e for e in _owned_entities(graph, ".language")}
+    output = []
+    for urn, item in by_urn.items():
+        name = _localized(item.get("name"))
+        if not name:
+            continue
+        output.append(
+            {"id": urn, "name": name, "proficiency": _localized(item.get("proficiency"))}
+        )
+    return output
 
 
-def parse_certifications(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    entities = _entities(payload)
+def parse_certifications(graph: NormalizedGraph) -> list[dict[str, Any]]:
     organizations = {
-        str(item.get("entityUrn")): item
-        for item in entities
-        if (_type(item).endswith(".organization") or _type(item).endswith(".company"))
-        and item.get("entityUrn")
+        str(e.get("entityUrn")): e
+        for e in _owned_entities(graph, ".organization") + _owned_entities(graph, ".company")
+        if e.get("entityUrn")
     }
     output = []
-    for item in entities:
-        if not _type(item).endswith(".certification"):
-            continue
+    for item in _owned_entities(graph, ".certification"):
         name = _localized(item.get("name"))
         if not name:
             continue
@@ -237,53 +293,68 @@ def parse_certifications(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return output
 
 
-def parse_languages(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    output = _parse_named(payload, ".language")
-    by_urn = {str(item.get("entityUrn")): item for item in _entities(payload)}
-    for item in output:
-        source = by_urn.get(str(item.get("id")), {})
-        item["proficiency"] = _localized(source.get("proficiency")) or source.get("proficiency")
+def _named_owned(graph: NormalizedGraph, suffix: str) -> list[dict[str, Any]]:
+    output = []
+    for item in _owned_entities(graph, suffix):
+        name = _localized(item.get("name"))
+        if name:
+            output.append({"id": item.get("entityUrn"), "name": name})
     return output
 
 
-def parse_full_profile(payload: dict[str, Any]) -> dict[str, Any]:
-    """Extract the core identity and every section from one profile payload.
+# -- unified entry points ----------------------------------------------------
 
-    Both the dash profileView resource and the embedded page JSON return a
-    single entity graph, so all sections are derived from the same response —
-    the minimal request set LinkedIn itself requires.
+
+def parse_core_payload(payload: dict[str, Any], slug: str) -> dict[str, Any]:
+    """Parse a profile-core response into the core dict (+ owned sections).
+
+    A 200 whose graph carries no resolvable target Profile is schema drift:
+    typed failure, never a guessed profile.
     """
+    graph = NormalizedGraph(payload, slug=slug)
+    try:
+        core = parse_core(graph)
+    except (TargetProfileMissing, AmbiguousTargetProfile) as exc:
+        raise UpstreamOperationDrift(
+            "profile_core", "the response graph carries no resolvable target profile"
+        ) from exc
+    sections = {name: _owned_section(graph, name) for name in SECTION_ENTITY_SUFFIXES}
+    return {"core": core, "sections": sections}
+
+
+def parse_section_payload(payload: dict[str, Any], section: str) -> list[dict[str, Any]]:
+    """Parse a section (profileCards) response. Root-referenced ownership."""
+    graph = NormalizedGraph(payload)
+    parser = {
+        "experience": parse_experience,
+        "education": parse_education,
+        "skills": parse_skills,
+        "certifications": parse_certifications,
+        "languages": parse_languages,
+    }[section]
+    return parser(graph)
+
+
+def _owned_section(graph: NormalizedGraph, section: str) -> list[dict[str, Any]]:
+    parser = {
+        "experience": parse_experience,
+        "education": parse_education,
+        "skills": parse_skills,
+        "certifications": parse_certifications,
+        "languages": parse_languages,
+    }[section]
+    return parser(graph)
+
+
+# -- legacy compatibility ----------------------------------------------------
+# Kept for the fixture-driven unit tests and the benchmark tooling. The graph
+# is constructed internally from the payload; ownership rules are identical.
+
+
+def parse_full_profile(payload: dict[str, Any], slug: str | None = None) -> dict[str, Any]:
+    graph = NormalizedGraph(payload, slug=slug)
+    core = parse_core(graph)
     return {
-        "core": parse_core(payload),
-        "experience": parse_experience(payload),
-        "education": parse_education(payload),
-        "skills": parse_skills(payload),
-        "certifications": parse_certifications(payload),
-        "languages": parse_languages(payload),
+        "core": core,
+        **{name: _owned_section(graph, name) for name in SECTION_ENTITY_SUFFIXES},
     }
-
-
-PARSERS: dict[str, Callable[[dict[str, Any]], Any]] = {
-    "profile_core_v1": parse_core,
-    "experience_v1": parse_experience,
-    "education_v1": parse_education,
-    "skills_v1": parse_skills,
-    "certifications_v1": parse_certifications,
-    "languages_v1": parse_languages,
-    "full_profile_v1": parse_full_profile,
-}
-
-
-def parse(operation: str, parser_name: str, payload: dict[str, Any]) -> Any:
-    try:
-        parser = PARSERS[parser_name]
-    except KeyError as exc:
-        raise UpstreamOperationDrift(
-            operation, "No parser is registered for this operation."
-        ) from exc
-    try:
-        return parser(payload)
-    except (AttributeError, KeyError, TypeError, ValueError) as exc:
-        raise UpstreamOperationDrift(
-            operation, "The upstream payload failed its parser contract."
-        ) from exc

@@ -1,8 +1,8 @@
 version: 2
 operations:
-  # Primary operation. LIVE_VERIFIED 2026-08-28: observed HTTP 200 with a real
-  # member payload (publicIdentifier + firstName/lastName/headline/summary/
-  # profilePicture/backgroundPicture verified against the live entity).
+  # PRIMARY. LIVE_VERIFIED 2026-08-29: observed HTTP 200 with a real member
+  # payload — identity/URN/publicIdentifier/name/headline/summary/images all
+  # normalized from the included[] Profile entity.
   - semantic_name: profile_view
     enabled: true
     evidence_status: live_verified
@@ -14,11 +14,72 @@ operations:
     decoration_ids: []
     observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#dash-profiles
-  # Full-profile projection: single-call attempt for every section. Decorations
-  # rotate; tried before per-section cards when sections are missing.
-  - semantic_name: profile_view_full
+  # Section contracts (governing spec §6). Resource shape:
+  #   /voyager/api/identity/dash/profileCards/{memberId}-{SECTION}-en_US
+  # Evidence status is deliberately "historical": the shapes are implemented
+  # and shape-tested but no live request has verified them yet. Only a real
+  # successful response may promote these to live_verified.
+  - semantic_name: profile_experience
     enabled: true
     evidence_status: historical
+    kind: restli
+    method: GET
+    path: /voyager/api/identity/dash/profileCards/{resource_id}
+    transport_family: restli
+    parser: experience_v1
+    decoration_ids: []
+    observed_at: 2026-08-29T00:00:00Z
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+  - semantic_name: profile_education
+    enabled: true
+    evidence_status: historical
+    kind: restli
+    method: GET
+    path: /voyager/api/identity/dash/profileCards/{resource_id}
+    transport_family: restli
+    parser: education_v1
+    decoration_ids: []
+    observed_at: 2026-08-29T00:00:00Z
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+  - semantic_name: profile_skills
+    enabled: true
+    evidence_status: historical
+    kind: restli
+    method: GET
+    path: /voyager/api/identity/dash/profileCards/{resource_id}
+    transport_family: restli
+    parser: skills_v1
+    decoration_ids: []
+    observed_at: 2026-08-29T00:00:00Z
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+  - semantic_name: profile_certifications
+    enabled: true
+    evidence_status: historical
+    kind: restli
+    method: GET
+    path: /voyager/api/identity/dash/profileCards/{resource_id}
+    transport_family: restli
+    parser: certifications_v1
+    decoration_ids: []
+    observed_at: 2026-08-29T00:00:00Z
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+  - semantic_name: profile_languages
+    enabled: true
+    evidence_status: historical
+    kind: restli
+    method: GET
+    path: /voyager/api/identity/dash/profileCards/{resource_id}
+    transport_family: restli
+    parser: languages_v1
+    decoration_ids: []
+    observed_at: 2026-08-29T00:00:00Z
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+  # Speculative full-profile decoration: disabled — unverified, and a failed
+  # attempt consumes scarce session budget (governing spec §3.5: no
+  # speculative section fan-out). Re-enable only after live verification.
+  - semantic_name: profile_view_full
+    enabled: false
+    evidence_status: unverified
     kind: restli
     method: GET
     path: /voyager/api/identity/dash/profiles
@@ -29,23 +90,8 @@ operations:
       - com.linkedin.voyager.dash.deco.identity.profile.WebFullProfileWithEntityActions-19
     observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#dash-profiles
-  # Per-section profile cards. The core entity references
-  # urn:li:fsd_profileCard:({memberId},{SECTION},{locale}); the card resource
-  # answers for {memberId}-{SECTION}-{locale}. Parsed with the matching
-  # section parser by the orchestrator.
-  - semantic_name: profile_sections
-    enabled: true
-    evidence_status: historical
-    kind: restli
-    method: GET
-    path: /voyager/api/identity/dash/profileCards/{resource_id}
-    transport_family: restli
-    parser: full_profile_v1
-    decoration_ids: []
-    observed_at: 2026-08-29T00:00:00Z
-    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
-  # Fallback operation: direct authenticated fetch of the profile page itself
-  # and extraction of embedded Voyager JSON. Pure HTTP; no browser.
+  # Fallback: direct authenticated fetch of the profile page itself and
+  # extraction of embedded Voyager JSON. Pure HTTP; no browser.
   - semantic_name: profile_page
     enabled: true
     evidence_status: historical

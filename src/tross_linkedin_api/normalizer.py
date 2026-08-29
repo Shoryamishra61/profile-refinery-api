@@ -49,12 +49,14 @@ def normalize_profile(
     core: dict[str, Any],
     sections: dict[str, Any],
     observed_at: datetime,
+    section_failures: dict[str, str] | None = None,
 ) -> Profile:
-    """Deterministically normalize a parsed full-profile payload.
+    """Deterministically normalize a parsed profile payload.
 
-    A section that is absent from the upstream payload is reported as
-    NOT_PROVIDED — never invented. Only explicit upstream failures remove
-    data that was actually observed.
+    Section truthfulness (governing spec P0.4): a section that was retrieved
+    and is genuinely empty normalizes to ``[]`` with status ``present``; a
+    section whose retrieval failed is ``null`` with an explicit failure
+    status. There is no third "guessed" state.
     """
     identity_data = core.get("identity", {})
     member_urn = identity_data.get("member_urn")
@@ -65,7 +67,16 @@ def normalize_profile(
         public_identifier=identity_data.get("public_identifier"),
     )
 
+    failures = section_failures or {}
+
     def section(name: str, model: type[Any]) -> ProfileField[Any]:
+        if name in failures:
+            status = (
+                FieldStatus.UPSTREAM_FAILED
+                if failures[name] == "upstream_failed"
+                else FieldStatus.NOT_AVAILABLE_FROM_ENDPOINT
+            )
+            return field(None, name, observed_at, status=status, raw_ref=core_ref)
         raw = sections.get(name, [])
         try:
             values = [model.model_validate(item) for item in raw]
@@ -75,6 +86,8 @@ def normalize_profile(
 
     return Profile(
         identity=field(identity, "profile_core", observed_at, raw_ref=core_ref),
+        first_name=field(core.get("first_name"), "profile_core", observed_at, raw_ref=core_ref),
+        last_name=field(core.get("last_name"), "profile_core", observed_at, raw_ref=core_ref),
         name=field(core.get("name"), "profile_core", observed_at, raw_ref=core_ref),
         headline=field(core.get("headline"), "profile_core", observed_at, raw_ref=core_ref),
         location=field(core.get("location"), "profile_core", observed_at, raw_ref=core_ref),

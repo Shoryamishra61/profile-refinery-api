@@ -1,27 +1,55 @@
 {
-  "data": {"profile": {"elements": ["urn:li:fsd_profile:SYNTHETIC-001"]}},
-  "included": [
-    {
-      "$type": "com.linkedin.voyager.dash.identity.Profile",
-      "entityUrn": "urn:li:fsd_profile:SYNTHETIC-001",
-      "firstName": {"localized": {"en_US": "Avery"}},
-      "lastName": {"localized": {"en_US": "Raman"}},
-      "headline": {"localized": {"en_US": "Distributed systems engineer"}},
-      "geoLocationName": "Bengaluru, Karnataka, India",
-      "summary": {"localized": {"en_US": "Builds reliable data systems."}},
-      "profilePicture": {
-        "displayImage": "urn:li:digitalmediaAsset:SYNTHETIC-PROFILE",
-        "displayImageReference": {
-          "vectorImage": {
-            "artifacts": [
-              {"width": 100, "height": 100, "downloadUrl": "https://media.licdn.example/synthetic-100.jpg"},
-              {"width": 800, "height": 800, "downloadUrl": "https://media.licdn.example/synthetic-800.jpg", "expiresAt": 1893456000}
-            ]
-          }
-        }
-      },
-      "backgroundPicture": null
-    }
+ "data": {
+  "*elements": [
+   "urn:li:fsd_profile:SYNTHETIC-001"
   ]
+ },
+ "included": [
+  {
+   "$type": "com.linkedin.voyager.dash.identity.Profile",
+   "entityUrn": "urn:li:fsd_profile:SYNTHETIC-001",
+   "firstName": {
+    "localized": {
+     "en_US": "Avery"
+    }
+   },
+   "lastName": {
+    "localized": {
+     "en_US": "Raman"
+    }
+   },
+   "headline": {
+    "localized": {
+     "en_US": "Distributed systems engineer"
+    }
+   },
+   "geoLocationName": "Bengaluru, Karnataka, India",
+   "summary": {
+    "localized": {
+     "en_US": "Builds reliable data systems."
+    }
+   },
+   "profilePicture": {
+    "displayImage": "urn:li:digitalmediaAsset:SYNTHETIC-PROFILE",
+    "displayImageReference": {
+     "vectorImage": {
+      "artifacts": [
+       {
+        "width": 100,
+        "height": 100,
+        "downloadUrl": "https://media.licdn.example/synthetic-100.jpg"
+       },
+       {
+        "width": 800,
+        "height": 800,
+        "downloadUrl": "https://media.licdn.example/synthetic-800.jpg",
+        "expiresAt": 1893456000
+       }
+      ]
+     }
+    }
+   },
+   "backgroundPicture": null
+  }
+ ]
 }
-

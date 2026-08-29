@@ -37,7 +37,7 @@ async def test_live_profile_contract_and_provenance(client: httpx.AsyncClient) -
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["schema_version"] == "1.1.0"
+    assert body["schema_version"] == "1.2.0"
     assert body["canonical_url"] == "https://www.linkedin.com/in/test-integration-profile"
     retrieval = body["retrieval"]
     assert retrieval["mode"] == "live"
@@ -48,7 +48,16 @@ async def test_live_profile_contract_and_provenance(client: httpx.AsyncClient) -
         == "https://linkedin.com/in/test-integration-profile?trk=example"
     )
     profile = body["profile"]
+    assert profile["first_name"]["value"] == "Integration"
+    assert profile["last_name"]["value"] == "Check"
     assert profile["name"]["value"] == "Integration Check"
+    assert body["meta"]["coverage"] == {
+        "experience": "observed",
+        "education": "observed",
+        "skills": "observed",
+        "certifications": "observed",
+        "languages": "observed",
+    }
     assert profile["headline"]["value"].startswith("Staff Engineer")
     assert len(profile["experience"]["value"]) == 2
     assert profile["experience"]["value"][0]["is_current"] is True
@@ -62,6 +71,7 @@ async def test_live_profile_contract_and_provenance(client: httpx.AsyncClient) -
     assert profile["certifications"]["value"][0]["authority"] == "Open Verification Institute"
     assert profile["languages"]["value"][0]["proficiency"] == "NATIVE"
     assert profile["background_image"]["status"] == "not_provided"
+    assert body["partial"] is False
     assert body["meta"]["transport_strategy"] == "profile_view"
     assert body["meta"]["viewer_context"] == "authenticated_backend_member"
 
