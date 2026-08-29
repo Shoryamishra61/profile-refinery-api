@@ -1,10 +1,37 @@
 # Tross LinkedIn Profile API
 
-A browserless LinkedIn profile extraction API. It accepts a LinkedIn profile URL,
-performs **direct HTTP calls** against LinkedIn's Voyager/Rest.li endpoints using an
-owned authenticated session, normalizes the returned entity graph, and returns
-stable, provenance-carrying JSON. It never uses a browser, never runs browser
-automation, and never falls back to synthetic data.
+**A browser-free LinkedIn Profile API that accepts a LinkedIn profile URL and
+returns structured profile data using direct authenticated HTTP calls to
+LinkedIn's internal web API (Voyager/Dash).** No Selenium, no Playwright, no
+browser automation, no fixture fallback — when LinkedIn refuses the session the
+API fails closed with a typed error.
+
+Sample request:
+
+```bash
+curl -H "X-API-Key: $KEY"   "https://tross-linkedin-profile-api.vercel.app/v1/profiles?url=https://www.linkedin.com/in/williamhgates/"
+```
+
+Sample response (real data captured 2026-08-29; abridged):
+
+```json
+{
+  "schema_version": "1.2.0",
+  "canonical_url": "https://www.linkedin.com/in/williamhgates",
+  "retrieval": {"mode": "live", "fixture": false, "source": "linkedin"},
+  "profile": {
+    "identity": {"value": {"member_urn": "urn:li:fsd_profile:ACoAAA8BYqEBCGLg_vT_ca6mMEqkpp9nVffJ3hc",
+                            "public_identifier": "williamhgates"}},
+    "first_name": {"value": "William"},
+    "last_name": {"value": "Henry Gates III"},
+    "headline": {"value": "Co-chair, Gates Foundation..."},
+    "about": {"value": "Chair of the Gates Foundation. Founder of Breakthrough Energy..."},
+    "profile_image": {"value": {"url": "https://media.licdn.com/dms/image/v2/..."}},
+    "experience": {"value": [...]},
+    "skills": {"value": [...]}
+  },
+  "meta": {"coverage": {"experience": "observed", ...}, "warnings": []}
+}
 
 - **Live API:** https://tross-linkedin-profile-api.vercel.app
 - **Repository:** https://github.com/Shoryamishra61/tross-linkedin-profile-api
