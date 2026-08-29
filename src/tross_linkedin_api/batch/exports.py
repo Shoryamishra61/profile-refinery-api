@@ -69,8 +69,15 @@ def csv_bytes(rows: list[dict[str, Any]]) -> bytes:
     writer = csv.DictWriter(buffer, fieldnames=FLAT_COLUMNS, extrasaction="ignore")
     writer.writeheader()
     for row in rows:
-        writer.writerow(row)
+        writer.writerow({key: _tabular_safe_value(value) for key, value in row.items()})
     return buffer.getvalue().encode("utf-8")
+
+
+def _tabular_safe_value(value: Any) -> Any:
+    """Prevent stored spreadsheet formulas in CSV/XLSX scalar cells."""
+    if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+    return value
 
 
 def _spreadsheet_safe(record: dict[str, Any]) -> dict[str, Any]:
@@ -81,7 +88,7 @@ def _spreadsheet_safe(record: dict[str, Any]) -> dict[str, Any]:
             parts = [str(value[k]) for k in ("year", "month", "day") if k in value]
             safe[key] = "-".join(parts) if parts else json.dumps(value, sort_keys=True)
         else:
-            safe[key] = value
+            safe[key] = _tabular_safe_value(value)
     return safe
 
 
@@ -111,7 +118,7 @@ def xlsx_bytes(
         sheet = workbook.create_sheet(title)
         sheet.append(columns)
         for record in records:
-            sheet.append([record.get(column) for column in columns])
+            sheet.append([_tabular_safe_value(record.get(column)) for column in columns])
 
     write("profiles", FLAT_COLUMNS, rows)
     section_columns = {

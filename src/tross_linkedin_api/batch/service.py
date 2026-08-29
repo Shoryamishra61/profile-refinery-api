@@ -601,7 +601,12 @@ class BatchService:
             raise BatchNotFoundError()
         rows = self._export_rows(batch)
         if export_format == "json":
-            payload = json.loads(exports.json_document(batch.summary(), rows).decode("utf-8"))
+            complete_profiles = [
+                job.public_dict(include_responses=True) for job in batch.jobs
+            ]
+            payload = json.loads(
+                exports.json_document(batch.summary(), complete_profiles).decode("utf-8")
+            )
             return JSONResponse(
                 payload,
                 headers={"Content-Disposition": f'attachment; filename="{batch_id}.json"'},

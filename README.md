@@ -9,11 +9,15 @@ no fixture or replay fallback in `APP_MODE=live`.
 
 ## Current production status
 
-Production is **not live-verified**. The authenticated RSC `profile_view` request
-reaches LinkedIn, but the currently observed Vercel response is a 135-byte React
-Flight stream with one model record and no `prioritizedProfileId`, target identity,
-or profile SetState values. The API therefore fails closed with
-`UPSTREAM_OPERATION_DRIFT`; it does not emit fixture, replay, or inferred data.
+Production is **not live-verified**. For request `final-p0-acceptance-2`, the
+authenticated RSC `profile_view` request reached LinkedIn and returned HTTP 200,
+but usable core parsing failed with `UPSTREAM_OPERATION_DRIFT`. The orchestrator
+then executed the registered authenticated `profile_page` fallback. LinkedIn
+returned HTTP 302, the transport classified `UPSTREAM_CHALLENGE`, and the circuit
+breaker opened. The API emitted no fixture, replay, or inferred profile data.
+
+That trace proves the fallback fix in production. It does not prove that the
+current upstream session can return normalized live profile JSON.
 
 Evidence labels have these exact meanings:
 
@@ -32,9 +36,11 @@ The deployed primary protocol is LinkedIn SDUI over React Flight:
    `profileCardsActivity` component and vanity-name payload.
 2. Resolve the target-owned `prioritizedProfileId` and semantic name, headline,
    and image SetState values from the Flight model records.
-3. Request the enabled Experience, Education, Skills, Certifications, and
+3. If core parsing drifts, try the authenticated direct-HTTP `profile_page`
+   fallback and parse embedded semantic profile data. Challenges remain terminal.
+4. Request the enabled Experience, Education, Skills, Certifications, and
    Languages profile-card components using that target identity.
-4. Parse semantic Flight entities and normalize them against the public schema.
+5. Parse semantic entities and normalize them against the public schema.
 
 The request uses JSON, `csrf-token`, `x-li-anchor-page-key`, and
 `x-li-rsc-stream`. Dynamic trace, page-instance, and parent-span telemetry is not
@@ -51,8 +57,12 @@ canonical URL + API-key validation
         v
 profileCardsActivity RSC request
         |
-        v
-target identity resolver
+        +-- usable identity ----------------------+
+        |                                         |
+        +-- parser drift -> authenticated page ---+
+                                                  |
+                                                  v
+                                        target identity resolver
         |
         v
 section RSC requests -> semantic Flight parser -> schema 1.2.0
@@ -86,6 +96,37 @@ The following is an illustrative **schema shape**, not a live-success example:
 Actual successful responses are validated against
 `schemas/profile-response.schema.json`. Empty arrays do not prove section
 extraction, and synthetic values are never reported as live evidence.
+
+## Offline batch, file, and export subsystem
+
+The batch subsystem is independently verified with mocked/replay extractor data;
+this is `SYNTHETIC_UNIT`/non-live evidence and does not imply LinkedIn availability.
+
+- Inputs: pasted text, TXT, CSV, JSON, XLSX, DOCX, and PDF.
+- Discovery: member URLs only, canonicalization, cross-file deduplication, and
+  occurrence provenance (offset, line/paragraph/page, CSV column, JSON path,
+  XLSX sheet/cell).
+- Safety/limits: content-based type detection, malformed and unsupported input
+  handling, encrypted-PDF rejection, 2,000-page PDF cap, 20-sheet/10,000-row
+  XLSX caps, upload and URL limits.
+- Batch behavior: idempotency, deterministic job IDs/states, bounded concurrency,
+  partial-failure isolation, queue control, and journal restart recovery.
+- Exports: complete JSON records, deterministic flattened CSV, and XLSX sheets
+  `profiles`, `experience`, `education`, `skills`, `certifications`, `languages`,
+  `provenance`, and `failures`. CSV/XLSX formula-like cells are stored as text.
+
+Endpoints:
+
+```text
+POST /v1/batches
+GET  /v1/batches/{batch_id}
+GET  /v1/batches/{batch_id}/profiles
+GET  /v1/batches/{batch_id}/profiles/{profile_id}
+GET  /v1/batches/{batch_id}/report
+GET  /v1/batches/{batch_id}/export?format=json|csv|xlsx
+```
+
+PDF is supported as input. PDF output is not required and is not implemented.
 
 ### Error taxonomy
 
@@ -129,9 +170,10 @@ uv run pytest
 uv run ruff check src tests scripts
 uv run mypy
 uv run python scripts/security_audit.py
+uv run pip-audit
 ```
 
-Current acceptance-suite count: `129` tests. This count is updated
+Current acceptance-suite count: `138` tests. This count is updated
 from the full `pytest` run; it is not evidence of live LinkedIn extraction.
 
 ## Safety boundary

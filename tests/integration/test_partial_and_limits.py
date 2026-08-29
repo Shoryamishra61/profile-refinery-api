@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from conftest import StubTransport
 
 from tross_linkedin_api.config import Settings
 from tross_linkedin_api.main import create_app
+from tross_linkedin_api.runtime import Runtime
 
 
 @pytest.mark.asyncio
@@ -17,7 +19,8 @@ async def test_caller_rate_limit_is_429() -> None:
         linkedin_li_at="configured",
         linkedin_jsessionid='"ajax:configured"',
     )
-    app = create_app(settings)
+    runtime = Runtime(settings, transport=StubTransport())
+    app = create_app(runtime=runtime)
     params = {"url": "https://linkedin.com/in/rate-limited-person"}
     headers = {"X-API-Key": "rate-key"}
     async with httpx.AsyncClient(
@@ -31,3 +34,4 @@ async def test_caller_rate_limit_is_429() -> None:
     assert limited.status_code == 429
     assert limited.json()["code"] == "CALLER_RATE_LIMITED"
     assert int(limited.headers["retry-after"]) >= 1
+    await runtime.aclose()

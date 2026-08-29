@@ -1,193 +1,84 @@
-# Final Verification
+# Final Acceptance Report
 
-All results below are **actually observed** during the final pass on
-2026-08-28 (UTC). Nothing in this document is aspirational.
+Observed 2026-08-30. Evidence classes remain exactly `LIVE`,
+`REAL_HAR_REPLAY`, and `SYNTHETIC_UNIT`.
 
-## Identity
+## Submission statuses
 
-| Item | Value |
-|---|---|
-| Production URL | https://tross-linkedin-profile-api.vercel.app |
-| Repository | https://github.com/Shoryamishra61/tross-linkedin-profile-api |
-| Final pass date | 2026-08-28 |
-| Deployed functional commit | `330109d` (Vercel production deploy of this tree) |
-| Repository HEAD at submission | `330109d` |
-| Deployment | Vercel project `tross-linkedin-profile-api` (Production) |
-| Stack | Python 3.12, FastAPI, httpx, pydantic v2, deployed on Vercel serverless |
+| Status | Value | Basis |
+|---|---|---|
+| `IMPLEMENTATION_COMPLETE` | **TRUE** | Direct-HTTP extractor, deterministic parsers, fail-closed API, and offline batch/file/export scope are implemented and tested. |
+| `LIVE_UPSTREAM_VERIFICATION_BLOCKED` | **TRUE** | Production reaches LinkedIn but the current upstream responses do not yield normalized live profile JSON. |
+| `SUBMISSION_READY` | **FALSE** | A fresh authenticated production request has not returned a genuine normalized live profile. |
 
-## Quality gates (observed)
+## Verified production sequence
 
-| Check | Result |
-|---|---|
-| `pytest` | **87 passed** in 5.9s |
-| `ruff check src tests scripts` | All checks passed |
-| `mypy` (strict) | Success: no issues found in 22 source files |
-| `scripts/security_audit.py` | PASSED — 153 files scanned; browser dependencies=0; secret patterns=0 |
-| Fixture leakage | Structurally impossible: fixture app mode deleted; sentinel guard tested (`LIVE_FIXTURE_LEAK_DETECTED`) |
+Request ID: `final-p0-acceptance-2`.
 
-## Production smoke tests (observed)
-
-| Test | Observed result |
-|---|---|
-| `GET /healthz` | 200 `{"status":"ok"}` |
-| `GET /readyz` (no LinkedIn session configured) | 503 `{"status":"not_ready"}` |
-| `GET /v1/profiles` without API key | 401 `UNAUTHORIZED_CALLER` (problem+json) |
-| `GET /v1/profiles` with invalid key | 401 `UNAUTHORIZED_CALLER` |
-| `GET /v1/profiles` with valid key, no session | 503 `UPSTREAM_AUTH_REQUIRED` (fail-closed, no fixture) |
-| `POST /v1/batches` (JSON body, 3 URL occurrences) | 202; discovered=3, duplicates_removed=1, unique=2 |
-| `GET /v1/batches/{id}?wait_seconds=20` | queue advanced; both jobs FAILED with `UPSTREAM_AUTH_REQUIRED` (correct fail-closed), per-job error codes exposed |
-| `GET /v1/batches/{id}/profiles` | per-profile state, occurrences with provenance (source_type, offset, original_text) |
-| `GET /v1/batches/{id}/export?format=csv` | 200 text/csv with flattened columns and per-job status |
-| `GET /v1/batches/{id}` aggregate `report` | `{"profiles_processed": 2, "successful_extraction_ratio": 0.0}` |
-
-The batch statistics above demonstrate the ingestion → discovery → canonicalization →
-deduplication → queue → partial-failure → export pipeline running on the public
-HTTPS deployment. Profile jobs fail with `UPSTREAM_AUTH_REQUIRED` because production
-has no LinkedIn session configured — the intended, honest behavior.
-
-## Real-network LinkedIn verification (observed, through the shipped transport code)
-
-Executed on 2026-08-28 from the development machine, using `tross_linkedin_api.transport.LinkedInTransport`
-unchanged, against `www.linkedin.com`:
-
-| Probe | Observed result |
-|---|---|
-| Landing page session acquisition | HTTP 200, anonymous `JSESSIONID` obtained |
-| Dash API without CSRF header | 403 body `CSRF check failed.` → header contract confirmed |
-| `GET /voyager/api/identity/profiles/{slug}/profileView` | HTTP 410 `{"data":{"status":410}}` → classic resource retired |
-| `GET /voyager/api/identity/dash/profileView?q=memberIdentity&...` with anonymous session | per-decoration HTTP 404 HTML (deco-specific), no member data without `li_at` |
-| Authenticated profile page, unauthenticated client | HTTP 999 bot wall → classified `UPSTREAM_CHALLENGE`, session failed closed |
-| Invalid `li_at` cookie | authwall redirect → classified `UPSTREAM_AUTH_EXPIRED`, session failed closed |
-
-These probes confirm the transport speaks to the real LinkedIn endpoints with real
-request/response semantics. They cannot produce profile data without a valid
-`li_at` session, which is the documented external prerequisite.
-
-## Real profile differential validation (A ≠ B ≠ C)
-
-**Status: pending one operator step.** The differential test (three unrelated real
-profiles producing materially different data) requires a valid `LINKEDIN_LI_AT` +
-`LINKEDIN_JSESSIONID` configured on the server. No such credential exists anywhere
-in the environment (verified: browser cookie stores, environment variables, Vercel
-secrets). The moment the operator supplies the cookie (steps in README → "The one
-remaining step"), run:
-
-```bash
-KEY=<api-key>
-for slug in <slug-a> <slug-b> <slug-c>; do
-  curl -s -H "X-API-Key: $KEY" \
-    "https://tross-linkedin-profile-api.vercel.app/v1/profiles?url=https://www.linkedin.com/in/$slug/"
-done
+```text
+profile_view RSC POST
+-> LinkedIn HTTP 200
+-> usable core parsing raises UPSTREAM_OPERATION_DRIFT
+-> orchestrator invokes profile_page fallback
+-> LinkedIn HTTP 302
+-> UPSTREAM_CHALLENGE
+-> circuit breaker OPEN
 ```
 
-and verify per profile: `canonical_url` matches the request, `retrieval.mode == "live"`,
-`retrieval.fixture == false`, names/headlines/experience differ between profiles, and
-no `SYNTHETIC-001` sentinel appears. The pipeline used by this test is the exact one
-covered by the 87 tests, including per-slug stubbed differentials that assert
-A → data A and B → data B.
+The request-correlated production logs prove that the parser-aware fallback is
+deployed. They do not retain the first response's byte/model diagnostics, so the
+earlier 135-byte/one-model observation is not attributed to this request.
 
-## Known limitations
+No CAPTCHA solving, proxy/account rotation, fingerprint spoofing, challenge-token
+generation, browser automation, or access-control circumvention was attempted.
 
-See README → Limitations. Principal items: extraction requires an owned session
-cookie; sessions expire (fail-closed); LinkedIn decoration ids rotate (config list);
-batch state is per-instance on serverless; no attempt is made to defeat challenges.
+## Offline acceptance matrix
 
-## Secret scan
+All extraction values in these tests use controlled mocked or replay input and
+are not reported as live LinkedIn evidence.
 
-`scripts/security_audit.py` (also wired into CI): passed. Manual grep across the
-tree for `li_at`/`JSESSIONID`-shaped values found only placeholder references in
-code/docs. The production `APP_API_KEYS` value lives only in Vercel's secret store;
-the repository contains no credentials.
-
-## Architecture verification (2026-08-28, second pass)
-
-The extraction subsystem was rebuilt around the upstream control plane after the
-challenge incident demonstrated that one personal session is a scarce, fragile
-resource. Full design: `ARCHITECTURE.md`; decisions: `docs/adr-0001..0006`.
-
-### Controlled proofs (fake upstream, zero LinkedIn traffic — 96 tests total)
-
-| Guarantee | Proof | Measured result |
+| Area | Result | Evidence |
 |---|---|---|
-| Bounded concurrency | `test_backpressure_hundred_jobs_two_concurrent` | 100 jobs, `max_active ≤ 2`, exactly 100 upstream calls, 100 succeeded |
-| Retry containment | `test_retry_containment_thirty_failures` | 30 failing jobs ⇒ exactly 120 upstream calls (ceiling 30×2×2=120); no storm |
-| Circuit breaker | `test_circuit_breaker_opens_recovers_via_single_probe` | challenge ⇒ OPEN (0 upstream calls while open) ⇒ cooldown ⇒ single probe ⇒ CLOSED |
-| Half-open failure | `test_half_open_probe_failure_reopens_breaker` | failed probe ⇒ OPEN again |
-| Challenge ≠ session death | `test_challenge_breaker_recovery_keeps_session_configured` | breaker recovers extraction automatically, session stays configured |
-| Durable jobs | `test_durable_jobs_survive_restart` | batch resumed by a fresh process; completed jobs never re-extracted |
-| Request coalescing | `test_request_coalescing_duplicate_profiles` | duplicate batches share one extraction |
-| Rate budget | `test_rate_budget_throttles_burst` | measured wall-clock pacing (8 requests throttled by 2/s refill) |
-| Backpressure responsiveness | resilience suite | API, exports and journal reads stay healthy while upstream is failing |
+| Pasted text | PASS | discovery, canonicalization, offsets, duplicates |
+| TXT | PASS | line provenance |
+| CSV input | PASS | row/column provenance |
+| JSON input | PASS | deterministic JSON-path provenance |
+| XLSX input | PASS | sheet/cell provenance; 20-sheet and 10,000-row caps |
+| DOCX input | PASS | paragraph provenance; malformed archive/XML handling |
+| PDF input | PASS | real text extraction, page provenance, encrypted rejection, 2,000-page cap |
+| Cross-file duplicates | PASS | slash/query variants merge while retaining every occurrence |
+| Unsupported/malformed files | PASS | explicit skipped/error outcomes |
+| Batch endpoints | PASS | create, poll, list, detail, report, export |
+| Idempotency/deterministic jobs | PASS | repeated keys and canonical URLs reuse stable identities |
+| Partial failures | PASS | failed profile does not kill successful siblings |
+| Queue/concurrency | PASS | bounded concurrency, retry containment, breaker behavior |
+| Persistence/restart | PASS | journal restore resumes unfinished work without re-running completed jobs |
+| JSON export | PASS | complete response and provenance retained; repeat output deterministic |
+| CSV export | PASS | fixed headers, counts/current role, repeat bytes, formula-cell protection |
+| XLSX export | PASS | eight required sheets, section/provenance/failure rows, repeat structure/data |
+| PDF output | NOT REQUIRED | intentionally not implemented |
 
-### Production evidence
+## Quality gates
 
-| Check | Observed |
+| Gate | Result |
 |---|---|
-| `GET /readyz` with session configured | 200 with `extraction_capability.state` (CLOSED/OPEN/… separated from readiness) |
-| `GET /metrics` | Prometheus counters/gauges: breaker state, queue depth/age, jobs, retries |
-| `GET /v1/capability` | full control-plane state (breaker, governor counters, queue) |
-| Real extraction A/B/C/A + paced 30-profile acceptance | see "Live data evidence" below — extraction verified with real data; sustained-run completion tracks LinkedIn's client-fingerprint flag (quiet-recovery experiment automated in scripts/quiet_recovery_validation.py) |
+| pytest | **138 passed** |
+| Ruff | **PASS** |
+| strict mypy | **PASS**, 27 source files |
+| security audit | **PASS**, 621 files; browser dependencies 0; secret patterns 0 |
+| dependency audit | **PASS**, no known vulnerabilities; local project package not on PyPI |
+| tracked-secret scan | **PASS**, zero high-confidence patterns |
+| Git-history secret scan | **PASS**, zero high-confidence matching commits |
+| fresh clone | Recorded in final handoff after GitHub push |
 
-### Session challenge incident record
+## Release boundary
 
-* Trigger: ~20 rapid scripted probes of the dash API (pre-architecture diagnosis).
-* Upstream response: same-URL 302 with `li_at=delete me` cookie clearing; persists
-  for scripted calls for 1h+ regardless of pacing, fresh `JSESSIONID`, or full
-  companion-cookie context.
-* Architectural response: rate budget + breaker so this can never recur by
-  construction; recovery is automatic via the cooldown probe; no evasion attempted.
+The repository and offline implementation are complete. The public deployment is
+reachable and fails closed. Submission readiness remains false until a future
+fresh authenticated production request returns genuine normalized live JSON with
+the mandatory profile sections supported by non-empty live evidence where the
+profile exposes those sections.
 
-## Live data evidence (2026-08-29)
-
-With a freshly logged-in operator session, the governed extraction path was
-verified against the real LinkedIn endpoint (local instance of the deployed
-application, residential network):
-
-| Field | Observed (profile: williamhgates — public figure) |
-|---|---|
-| `profile_view` operation | HTTP 200, `application/vnd.linkedin.normalized+json+2.1` |
-| identity.member_urn | `urn:li:fsd_profile:ACoAAA8BYqEBCGLg_vT_ca6mMEqkpp9nVffJ3hc` |
-| identity.public_identifier | `williamhgates` |
-| name | Bill Gates |
-| headline | "Chair, Gates Foundation and Founder, Breakthrough Energy" |
-| about | "Chair of the Gates Foundation. Founder of Breakthrough Energy. …" |
-| profile image | CDN url constructed from the live vectorImage artifacts (expiresAt kept) |
-| retrieval | mode=live, fixture=false, source=linkedin |
-
-Registry entry `profile_view` was flipped to `live_verified` on this evidence.
-
-## Session-flag status (honest)
-
-LinkedIn fingerprints generic HTTP clients: after one scripted request, further
-scripted voyager calls from the same client answer the soft-challenge 302 for a
-cooldown window — independent of pacing (10-minute and 60-minute silences
-tested), fresh `JSESSIONID`, or full companion-cookie context. The system
-handles this as designed (breaker OPEN ⇒ jobs retained ⇒ automatic cooldown
-probe ⇒ recovery when LinkedIn permits). The automated quiet-recovery
-experiment re-runs the differential and the paced 30-profile acceptance as soon
-as LinkedIn serves the session again; results land in this file.
-
-## Architecture pass addendum (2026-08-29)
-
-| Check | Observed |
-|---|---|
-| Tests | 97 passed (adds 7 resilience proofs + section-flow coverage) |
-| `ruff` / `mypy` strict / security audit | all green |
-| Production `GET /readyz` | 200 with `extraction_capability.state` (control-plane state separated from readiness) |
-| Production `GET /metrics`, `GET /v1/capability` | live: breaker state, queue depth/age, governor counters |
-| Real extraction on challenge | explicit `UPSTREAM_CHALLENGE` 503 with `request_id` — no synthetic fallback (observed live on production) |
-| Challenge semantics | job retained (`BLOCKED_UPSTREAM`), attempt budget preserved, automatic cooldown probe (test-proven) |
-| Bug found & fixed by live validation | error-path Content-Length mismatch crashed uvicorn; regression test added |
-
-### 30-profile acceptance status
-
-The acceptance harness is deployed and staged (`scripts/acceptance_run.py` — 30
-unique real profiles + 2 planted duplicates, paced by the governor, breaker
-aware). LinkedIn currently answers every scripted voyager request from our
-client fingerprint with the soft-challenge 302 (persists through 60-minute
-silence, fresh `JSESSIONID`, full cookie context; see protocol notes observation
-11). The automated quiet-recovery watcher re-runs the differential and the
-acceptance the moment LinkedIn serves the session, and writes measured results
-to `C:/tmp/acceptance_result.json`. A fresh operator login clears the flag
-immediately; no workaround is implemented because every candidate workaround is
-safeguard evasion.
+Exact remaining blocker: LinkedIn currently returns an unusable HTTP-200
+`profile_view` core response followed by an HTTP-302 challenge on the direct-HTTP
+`profile_page` fallback in Vercel production.

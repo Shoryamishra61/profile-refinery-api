@@ -11,6 +11,36 @@ from tross_linkedin_api.batch.discovery import dedupe, discover_in_text
 from tross_linkedin_api.batch.ingest import IngestError, ingest, sanitize_filename, sniff_kind
 
 
+def minimal_pdf_with_text(text: str) -> bytes:
+    """Build a deterministic one-page PDF with extractable Helvetica text."""
+    escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    stream = f"BT /F1 10 Tf 10 100 Td ({escaped}) Tj ET".encode()
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 200] "
+            b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"
+        ),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+    document = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(document))
+        document.extend(f"{number} 0 obj\n".encode() + body + b"\nendobj\n")
+    xref = len(document)
+    document.extend(f"xref\n0 {len(objects) + 1}\n".encode())
+    document.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        document.extend(f"{offset:010d} 00000 n \n".encode())
+    document.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    )
+    return bytes(document)
+
+
 def test_discovers_bare_and_qualified_urls_with_provenance() -> None:
     text = "John: linkedin.com/in/john-smith\nnext https://www.linkedin.com/in/jane-doe/?trk=x end"
     found = discover_in_text(text, source_type="pasted_text")
@@ -106,15 +136,47 @@ def test_docx_ingestion_records_paragraph() -> None:
 
 
 def test_pdf_ingestion_records_page() -> None:
+    payload = minimal_pdf_with_text("Profile https://www.linkedin.com/in/pdf-person/")
+    found = ingest(payload, "profiles.pdf", "profiles.pdf")
+    assert len(found) == 1
+    assert found[0][0] == "https://www.linkedin.com/in/pdf-person"
+    assert found[0][1].row == 1
+
+
+def test_encrypted_pdf_is_rejected() -> None:
     pytest.importorskip("pypdf")
     from pypdf import PdfWriter
 
     writer = PdfWriter()
     writer.add_blank_page(width=200, height=200)
+    writer.encrypt("owner-controlled-password")
     buffer = io.BytesIO()
-    writer.add_metadata({})
     writer.write(buffer)
-    assert sniff_kind(buffer.getvalue(), "doc.pdf") == "pdf"
+    with pytest.raises(IngestError, match="Encrypted PDFs are not supported"):
+        ingest(buffer.getvalue(), "encrypted.pdf", "encrypted.pdf")
+
+
+def test_pdf_page_limit_is_2000(monkeypatch: pytest.MonkeyPatch) -> None:
+    import pypdf
+
+    class Page:
+        def __init__(self, text: str) -> None:
+            self._text = text
+
+        def extract_text(self) -> str:
+            return self._text
+
+    class Reader:
+        is_encrypted = False
+        pages = [Page("") for _ in range(1999)] + [
+            Page("linkedin.com/in/page-2000"),
+            Page("linkedin.com/in/page-2001"),
+        ]
+
+    monkeypatch.setattr(pypdf, "PdfReader", lambda _: Reader())
+    found = ingest(b"%PDF-controlled", "limited.pdf", "limited.pdf")
+    assert [url for url, _ in found] == ["https://www.linkedin.com/in/page-2000"]
+    assert found[0][1].row == 2000
 
 
 def test_json_ingestion_records_key_path() -> None:
@@ -131,6 +193,38 @@ def test_malformed_and_unsupported_files_are_explicit_errors() -> None:
         pass
     else:
         raise AssertionError("binary blob must raise IngestError")
+
+
+@pytest.mark.parametrize(
+    ("payload", "filename", "message"),
+    [
+        (b"PK\x03\x04broken", "broken.docx", "corrupt OOXML"),
+        (b"%PDF-not-a-document", "broken.pdf", "PDF could not be parsed"),
+    ],
+)
+def test_malformed_structured_files_are_explicit(
+    payload: bytes, filename: str, message: str
+) -> None:
+    with pytest.raises(IngestError, match=message):
+        ingest(payload, filename, filename)
+
+
+def test_xlsx_sheet_and_row_limits_are_deterministic() -> None:
+    workbook = openpyxl.Workbook()
+    first = workbook.active
+    first.title = "Included"
+    first["A10000"] = "linkedin.com/in/row-10000"
+    first["A10001"] = "linkedin.com/in/row-10001"
+    for index in range(2, 22):
+        workbook.create_sheet(f"Sheet{index}")
+    workbook.worksheets[20]["A1"] = "linkedin.com/in/sheet-21"
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+
+    found = ingest(buffer.getvalue(), "limits.xlsx", "limits.xlsx")
+    assert [url for url, _ in found] == ["https://www.linkedin.com/in/row-10000"]
+    assert found[0][1].sheet == "Included"
+    assert found[0][1].row == 10_000
 
 
 def test_filenames_are_sanitized() -> None:

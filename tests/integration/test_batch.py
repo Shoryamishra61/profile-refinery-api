@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import io
+import json
 import zipfile
 
 import httpx
@@ -8,6 +10,7 @@ import openpyxl
 import pytest
 from conftest import FULL_PROFILE_FIXTURE, StubTransport
 
+from tross_linkedin_api.batch.exports import FLAT_COLUMNS
 from tross_linkedin_api.errors import ProfileNotFound, UpstreamTimeout
 
 TEXT = (
@@ -145,8 +148,19 @@ async def test_batch_exports_csv_json_xlsx(client: httpx.AsyncClient) -> None:
     )
     assert csv_response.status_code == 200
     assert csv_response.headers["content-type"].startswith("text/csv")
-    assert "linkedin_url" in csv_response.text
-    assert "Integration Check" in csv_response.text
+    csv_rows = list(csv.DictReader(io.StringIO(csv_response.text)))
+    assert list(csv_rows[0]) == FLAT_COLUMNS
+    assert csv_rows[0]["name"] == "Integration Check"
+    assert csv_rows[0]["current_title"] == "Staff Engineer"
+    assert csv_rows[0]["current_company"] == "Pipeline Validation Corp"
+    assert csv_rows[0]["experience_count"] == "2"
+    assert csv_rows[0]["education_count"] == "1"
+    repeated_csv = await client.get(
+        f"/v1/batches/{summary['batch_id']}/export",
+        params={"format": "csv"},
+        headers=auth(client),
+    )
+    assert repeated_csv.content == csv_response.content
 
     json_response = await client.get(
         f"/v1/batches/{summary['batch_id']}/export",
@@ -155,7 +169,18 @@ async def test_batch_exports_csv_json_xlsx(client: httpx.AsyncClient) -> None:
     )
     document = json_response.json()
     assert document["batch"]["batch_id"] == summary["batch_id"]
-    assert document["profiles"][0]["linkedin_url"].endswith("test-integration-profile")
+    exported = document["profiles"][0]
+    assert exported["canonical_url"].endswith("test-integration-profile")
+    assert exported["occurrences"][0]["source_type"] == "pasted_text"
+    assert exported["response"]["profile"]["name"]["value"] == "Integration Check"
+    assert len(exported["response"]["profile"]["experience"]["value"]) == 2
+    assert len(exported["response"]["profile"]["education"]["value"]) == 1
+    repeated_json = await client.get(
+        f"/v1/batches/{summary['batch_id']}/export",
+        params={"format": "json"},
+        headers=auth(client),
+    )
+    assert repeated_json.json() == document
 
     xlsx_response = await client.get(
         f"/v1/batches/{summary['batch_id']}/export",
@@ -230,6 +255,99 @@ async def test_batch_file_ingestion_csv_xlsx_docx_txt(client: httpx.AsyncClient)
     assert by_slug["xlsx-person"]["occurrences"][0]["sheet"] == "Sheet"
     assert by_slug["docx-person"]["occurrences"][0]["row"] == 1
     assert by_slug["txt-person"]["occurrences"][0]["row"] == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_file_ingestion_json_and_pdf_with_provenance(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pypdf
+
+    class Page:
+        def extract_text(self) -> str:
+            return "PDF candidate https://www.linkedin.com/in/pdf-batch-person/"
+
+    class Reader:
+        is_encrypted = False
+        pages = [Page()]
+
+    monkeypatch.setattr(pypdf, "PdfReader", lambda _: Reader())
+    json_payload = json.dumps(
+        {"candidates": [{"profile": "https://www.linkedin.com/in/json-batch-person/?trk=x"}]}
+    ).encode()
+    response = await client.post(
+        "/v1/batches",
+        files=[
+            ("files", ("people.json", json_payload, "application/json")),
+            ("files", ("people.pdf", b"%PDF-controlled", "application/pdf")),
+        ],
+        headers=auth(client),
+    )
+    assert response.status_code == 202
+    summary = response.json()
+    assert summary["statistics"]["unique_profiles"] == 2
+    await client.get(
+        f"/v1/batches/{summary['batch_id']}", params={"wait_seconds": 10}, headers=auth(client)
+    )
+    profiles = (
+        await client.get(f"/v1/batches/{summary['batch_id']}/profiles", headers=auth(client))
+    ).json()["profiles"]
+    by_slug = {job["canonical_url"].rsplit("/", 1)[-1]: job for job in profiles}
+    assert by_slug["json-batch-person"]["occurrences"][0]["column"] == (
+        "candidates[0].profile"
+    )
+    assert by_slug["pdf-batch-person"]["occurrences"][0]["row"] == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicates_across_files_merge_all_provenance(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/v1/batches",
+        files=[
+            (
+                "files",
+                ("one.txt", b"linkedin.com/in/cross-file-person", "text/plain"),
+            ),
+            (
+                "files",
+                (
+                    "two.csv",
+                    b"name,url\nPerson,https://www.linkedin.com/in/cross-file-person/?trk=csv",
+                    "text/csv",
+                ),
+            ),
+            (
+                "files",
+                (
+                    "three.json",
+                    json.dumps(
+                        {
+                            "profile": "https://www.linkedin.com/in/cross-file-person/",
+                            "malformed": "https://www.linkedin.com/in/../../admin",
+                        }
+                    ).encode(),
+                    "application/json",
+                ),
+            ),
+        ],
+        headers=auth(client),
+    )
+    assert response.status_code == 202
+    summary = response.json()
+    assert summary["statistics"]["url_occurrences_discovered"] == 3
+    assert summary["statistics"]["unique_profiles"] == 1
+    assert summary["statistics"]["duplicates_removed"] == 2
+    profiles = (
+        await client.get(f"/v1/batches/{summary['batch_id']}/profiles", headers=auth(client))
+    ).json()["profiles"]
+    occurrences = profiles[0]["occurrences"]
+    assert [item["source_name"] for item in occurrences] == [
+        "one.txt",
+        "two.csv",
+        "three.json",
+    ]
+    assert occurrences[1]["row"] == 2 and occurrences[1]["column"] == "url"
+    assert occurrences[2]["column"] == "profile"
 
 
 @pytest.mark.asyncio
@@ -327,13 +445,31 @@ async def test_batch_xlsx_has_spec_sheets(client: httpx.AsyncClient) -> None:
         "provenance",
         "failures",
     ]
+    profiles = workbook["profiles"]
+    headers = [cell.value for cell in profiles[1]]
+    assert headers == FLAT_COLUMNS
+    assert profiles.cell(row=2, column=headers.index("current_company") + 1).value == (
+        "Pipeline Validation Corp"
+    )
+    assert workbook["experience"].max_row == 3
+    assert workbook["education"].max_row == 2
+    assert workbook["skills"].max_row == 3
+    assert workbook["certifications"].max_row == 2
+    assert workbook["languages"].max_row == 2
+    assert workbook["provenance"].max_row == 2
+    assert workbook["failures"].max_row == 1
     # determinism: same stored input => byte-stable workbook structure
     again = await client.get(
         f"/v1/batches/{summary['batch_id']}/export",
         params={"format": "xlsx"},
         headers=auth(client),
     )
-    assert openpyxl.load_workbook(io.BytesIO(again.content)).sheetnames == workbook.sheetnames
+    repeated_workbook = openpyxl.load_workbook(io.BytesIO(again.content))
+    assert repeated_workbook.sheetnames == workbook.sheetnames
+    for sheet_name in workbook.sheetnames:
+        first_values = list(workbook[sheet_name].values)
+        repeated_values = list(repeated_workbook[sheet_name].values)
+        assert repeated_values == first_values
 
 
 @pytest.mark.asyncio

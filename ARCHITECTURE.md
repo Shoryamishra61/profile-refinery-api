@@ -23,19 +23,19 @@ Decision records: `docs/adr-0001` … `docs/adr-0006`.
   idempotency, persistence, observability.
 * No synthetic fallback. Live request + upstream failure = explicit failure.
 
-## 2. Workload model (measured)
+## 2. Workload model
 
 | Quantity | Value | Basis |
 |---|---|---|
 | Profiles per acceptance batch | N = 30 | assignment workload |
-| Upstream requests per profile | **R = 1** | the `dash/profiles` memberIdentity finder returns the entity graph in one call; the retired path needed 6 (core + 5 sections) — minimizing amplification was an explicit design objective |
-| Total upstream operations for a 30-batch | ≈ 30 (duplicates removed first) | N × R after dedup |
+| Upstream requests per profile | Variable | one RSC core request; parser drift may add the authenticated page fallback; usable identity may add verified section-card requests |
+| Total upstream operations for a 30-batch | Not claimed | depends on core usability, fallback, visible sections, breaker state, and deduplication |
 | Safe burst | 4 requests | `APP_UPSTREAM_BUCKET_CAPACITY` default; bursts ≈20 triggered a live challenge |
 | Safe sustained rate | 12 requests/minute | conservative default; the observed challenge cooldown bounds anything higher |
 | Safe concurrency | 2 | the rate budget, not concurrency, is the binding constraint; concurrency 2 keeps latency variance from clustering requests |
 | Retry budget | 1 upstream retry per operation (single layer), 2 executions per batch job | `APP_UPSTREAM_RETRIES`, `MAX_JOB_ATTEMPTS` |
 | Challenge cost | breaker OPEN, cooldown 300 s, one probe to recover | observed live: challenge ⇒ same-URL 302 + cookie clearing |
-| Expected 30-profile completion | ≈ 3–4 min at defaults (30 × 5 s pacing) | token-bucket arithmetic; measured wall clock recorded in the acceptance run |
+| Expected 30-profile completion | Not claimed | current production extraction is blocked by an upstream challenge |
 
 ## 3. High-level design
 
@@ -88,7 +88,7 @@ Decision records: `docs/adr-0001` … `docs/adr-0006`.
                 └────────┬──────────┘
                           ▼
                 ┌───────────────────┐
-                │ LINKEDIN          │  /voyager/api/identity/dash/profiles?q=memberIdentity
+                │ LINKEDIN          │  RSC profileCardsActivity
                 │ ENDPOINTS         │  fallback: authenticated page embedded-JSON
                 └────────┬──────────┘
                           ▼
@@ -137,16 +137,15 @@ governor.run(operation, call):
     challenge → breaker.record_challenge() → OPEN (all extraction pauses)
 ```
 
-Request-amplification accounting (why 1 request/profile matters): the retired
-six-operation design would have made a 30-batch cost 180 upstream requests —
-before retries. The current graph makes it 30; the retry budget caps the worst
-case at 120 for 30 total failures (`test_retry_containment_thirty_failures`).
+Request amplification is bounded by sequential orchestration, deduplication,
+the governor retry budget, and the circuit breaker. No fixed live
+requests-per-profile number is claimed while the active upstream path is blocked.
 
 ## 7. Failure model
 
 | Upstream event | Detection | System response |
 |---|---|---|
-| soft challenge (same-URL 302) | redirect location | session invalidated, breaker OPEN, jobs BLOCKED_UPSTREAM, explicit `UPSTREAM_CHALLENGE` |
+| soft challenge (non-authwall 302) | redirect location | session stays configured, breaker OPEN, jobs BLOCKED_UPSTREAM, explicit `UPSTREAM_CHALLENGE` |
 | hard challenge / checkpoint page | HTML body markers | same as above |
 | authwall redirect | redirect location | `UPSTREAM_AUTH_EXPIRED`, capability `AUTH_EXPIRED` |
 | 999 bot wall | page status | `UPSTREAM_CHALLENGE`, breaker OPEN |
@@ -182,8 +181,8 @@ limitation with a named upgrade path (managed KV behind `JournalStore`).
 
 * `GET /metrics` — Prometheus text: `tross_linkedin_operations_total`, breaker
   state, queue depth/age, jobs by outcome, retries, batches, coalesced jobs.
-* `GET /readyz` — readiness **plus** `extraction_capability` (CLOSED/OPEN/
-  HALF_OPEN/UNAVAILABLE) — readiness ≠ upstream capacity.
+* `GET /readyz` — success-required readiness plus `extraction_capability`
+  (`CLOSED`, `OPEN`, `HALF_OPEN`, `UNAVAILABLE`, `UNVERIFIED`, `UNUSABLE`).
 * `GET /v1/capability` — full state: capability, governor counters, queue stats.
 * Structured operation logs with request/job correlation ids; secrets and
   payloads excluded by construction.
@@ -192,13 +191,13 @@ limitation with a named upgrade path (managed KV behind `JournalStore`).
 
 | Metric | Value | Evidence |
 |---|---|---|
-| requests/profile | 1 | workload model §2; asserted `upstream.calls == jobs` in the backpressure proof |
+| requests/profile | variable | core, optional fallback, and visible-section plan; no current live throughput claim |
 | max concurrency | 2 (config) | asserted `max_active ≤ 2` under 100-job load |
 | retry amplification | none beyond budget | 30 failing jobs ⇒ exactly 120 calls (ceiling 120) |
 | breaker containment | 0 upstream calls while OPEN | blocked jobs record no HTTP attempt |
 | burst pacing | measured wall-clock throttling | `test_rate_budget_throttles_burst` |
 | restart safety | 0 re-extractions of completed jobs | `test_durable_jobs_survive_restart` |
-| 30-profile acceptance | see `FINAL_VERIFICATION.md` | paced production run |
+| 30-profile acceptance | BLOCKED | current production fallback receives HTTP 302 challenge |
 
 ## 11b. Field coverage matrix
 
@@ -206,18 +205,18 @@ Every Tross-required field, its source operation, and verification status:
 
 | Field | Source | Raw path (dash) | Status |
 |---|---|---|---|
-| name (first/last/full) | `profile_view` (live-verified) | `Profile.firstName/lastName` (plain or localized) | verified live (real payload) |
-| headline | `profile_view` (live-verified) | `Profile.headline` | verified live |
-| location | `profile_view` (live-verified) | `Profile.locationName` / `geoLocationName` | verified live (null when member hides it — null semantics) |
-| about | `profile_view` (live-verified) | `Profile.summary` | verified live (Bill Gates summary captured) |
-| profile image | `profile_view` (live-verified) | `Profile.profilePicture.displayImage.vectorImage` artifacts | verified live (CDN url constructed, expiresAt kept) |
-| background image | `profile_view` (live-verified) | `Profile.backgroundPicture(s)` | implemented; present only when member uploaded one |
-| public identifier / member URN | `profile_view` (live-verified) | `Profile.publicIdentifier`, `entityUrn` | verified live |
-| experience | `profile_view_full` decoration, else `profile_sections` card `…-EXPERIENCE-…` | `Position` entities (+ `Company` for url) | implemented, shape-tested; live verification pending session window |
-| education | same as experience | `Education` entities | implemented, shape-tested |
-| skills | same as experience | `Skill` entities (ordering preserved) | implemented, shape-tested |
-| certifications | same as experience | `Certification` (+ `Organization` authority) | implemented, shape-tested |
-| languages | same as experience | `Language` entities (proficiency) | implemented, shape-tested |
+| name (first/last/full) | `profile_view`, then `profile_page` fallback | semantic RSC state or owned Profile entity | implemented; `REAL_HAR_REPLAY`/`SYNTHETIC_UNIT`; current production blocked |
+| headline | same core plan | semantic RSC state or owned Profile entity | implemented; current production blocked |
+| location | same core plan | owned Profile location | implemented; current production blocked |
+| about | same core plan | owned Profile summary | implemented; current production blocked |
+| profile image | same core plan | semantic image state or owned vector image | implemented; current production blocked |
+| background image | same core plan | owned background image | implemented; current production blocked |
+| public identifier / member URN | same core plan | target identity resolver or owned Profile entity | implemented; current production blocked |
+| experience | verified section-card contract after usable identity | semantic Experience entities | deterministic parser tested; current production blocked |
+| education | verified section-card contract after usable identity | semantic Education entities | deterministic parser tested; current production blocked |
+| skills | verified section-card contract after usable identity | semantic Skill entities | deterministic parser tested; current production blocked |
+| certifications | verified section-card contract after usable identity | semantic Certification entities | deterministic parser tested; current production blocked |
+| languages | verified section-card contract after usable identity | semantic Language entities | deterministic parser tested; current production blocked |
 
 Sections that the viewer cannot see return `status: not_provided` with empty
 value — never fabricated.

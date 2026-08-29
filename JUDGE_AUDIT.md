@@ -1,16 +1,22 @@
 # Adversarial Judge Audit
 
-Audit updated: 2026-08-28. Overall challenge verdict: **PARTIAL / externally blocked**, not PASS.
+Audit updated: 2026-08-30. Overall challenge verdict: **IMPLEMENTATION_COMPLETE /
+LIVE_UPSTREAM_VERIFICATION_BLOCKED**, not submission-ready.
 
-The repository is a reproducible, secured, no-browser implementation with honest fixture evidence. A public Vercel service now exists in fail-closed live mode. It is not yet a completed live Tross submission because no current LinkedIn operation/session evidence is available and live profile requests correctly return 503.
+The repository is a reproducible, secured, no-browser implementation with
+explicit `LIVE`, `REAL_HAR_REPLAY`, and `SYNTHETIC_UNIT` evidence boundaries. A
+public Vercel service exists in fail-closed live mode. Production request
+`final-p0-acceptance-2` proved the parser-aware direct-HTTP fallback, then received
+an upstream HTTP-302 challenge. No current request has returned normalized live
+profile JSON.
 
 ## Definition of Done
 
 | Gate | Status | Executable evidence |
 |---|---|---|
-| Fresh clone installs; locked package; no path hacks | PASS | clean clone passed sync; current suite has 57 tests |
+| Fresh clone installs; locked package; no path hacks | PASS | clean-clone result recorded in final handoff; current suite has 138 tests |
 | Fixtures, schema, registry shipped | PASS | `tests/fixtures`, `schemas`, `config`; startup tests |
-| Direct LinkedIn HTTP runtime | PASS as implementation; BLOCKED as live observation | `transport.py`; mocked direct transport contract tests; no live call |
+| Direct LinkedIn HTTP runtime | PASS as implementation; BLOCKED as normalized live result | production trace reached RSC HTTP 200 and page fallback HTTP 302 |
 | No browser/DOM runtime | PASS | `uv run python scripts/security_audit.py` |
 | URL to current live core fields | BLOCKED | no session/capture/query ID; registry rejects live startup |
 | Experience/education/skills/certifications/languages live | BLOCKED | required current operation evidence absent |
@@ -53,15 +59,20 @@ The repository is a reproducible, secured, no-browser implementation with honest
 
 ## External blockers with evidence
 
-1. Environment contained no `LINKEDIN_*`, `LI_AT`, `JSESSIONID`, or current query-ID variables. No authorized capture/profile matrix was supplied. Attempting guessed historical endpoints would violate project evidence policy.
+1. Production has authorized session material, but the current upstream response
+   sequence does not yield usable core identity.
 2. Vercel device authentication was completed and the service deployed at `https://tross-linkedin-profile-api.vercel.app`; hosting access is no longer a blocker.
 3. GitHub repository publication succeeded, but the OAuth token lacked `workflow` scope. GitHub rejected `.github/workflows/ci.yml`; no SSH key or connected browser was available to approve the device grant.
 4. Docker Desktop was initially stopped; it was started and the build/container smoke gate subsequently passed.
-5. Production now starts in degraded `APP_MODE=live`, reports readiness 503, and returns `UPSTREAM_OPERATION_UNAVAILABLE` for profile requests. All checked-in operations remain fixture-verified rather than live-verified.
-6. Direct HTTP requests to the requested Shorya profile plus Satya Nadella and Bill Gates returned LinkedIn 429 responses without profile-specific content. No owned session, current query identifiers, authorized capture, or consented differential ground truth is present.
+5. Production starts in `APP_MODE=live` and readiness remains 503 until a
+   normalized live profile succeeds; it cannot silently return fixture/replay data.
+6. Request `final-p0-acceptance-2` reached `profile_view` (HTTP 200), failed usable
+   core parsing, invoked `profile_page`, received HTTP 302, returned
+   `UPSTREAM_CHALLENGE`, and opened the circuit breaker.
 
 ## Release decision
 
-Offline/repository release: **PASS** after final clean-room, dependency, process, Git, and publication checks.
+Offline/repository implementation: **PASS** after ingestion, batch, export,
+dependency, security, and reproducibility checks.
 
 Tross live assignment: **NOT PASS** until one owned-session core operation and required sections are independently verified, a controlled-live benchmark is run, and a public HTTPS deployment is externally exercised.
