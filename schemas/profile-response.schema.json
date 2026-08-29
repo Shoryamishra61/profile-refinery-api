@@ -6,6 +6,8 @@
   "required": ["schema_version", "input_url", "canonical_url", "observed_at", "partial", "retrieval", "profile", "meta"],
   "properties": {
     "schema_version": {"const": "1.2.0"},
+    "request_id": {"type": ["string", "null"]},
+    "status": {"enum": ["succeeded", "partial"]},
     "input_url": {"type": "string", "format": "uri", "maxLength": 2048},
     "canonical_url": {"type": "string", "format": "uri", "pattern": "^https://www\\.linkedin\\.com/in/[A-Za-z0-9_-]+$"},
     "observed_at": {"type": "string", "format": "date-time"},

@@ -142,6 +142,10 @@ class Batch:
             "status": self.status().value,
             "statistics": {
                 **self.stats,
+                "received": self.stats.get("url_occurrences_discovered", 0),
+                "valid": len(self.jobs),
+                "rejected": len(self.skipped_inputs),
+                "scheduled": len(self.jobs),
                 "unique_profiles": len(self.jobs),
                 "succeeded": counts[JobState.SUCCEEDED],
                 "failed": counts[JobState.FAILED],

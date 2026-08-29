@@ -117,7 +117,10 @@ def build_router(runtime: Runtime) -> APIRouter:
         canonical = canonicalize_profile_url(url)
         runtime.ensure_profile_available()
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        return await runtime.orchestrator.fetch(canonical, request_id)
+        response = await runtime.orchestrator.fetch(canonical, request_id)
+        response.request_id = request_id
+        response.status = "partial" if response.partial else "succeeded"
+        return response
 
     @router.post(
         "/v1/batches",

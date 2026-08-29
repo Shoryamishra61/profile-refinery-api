@@ -139,6 +139,8 @@ class Retrieval(StrictModel):
 
 class ProfileResponse(StrictModel):
     schema_version: str = "1.2.0"
+    request_id: str | None = None
+    status: Literal["succeeded", "partial"] = "succeeded"
     input_url: str
     canonical_url: str
     observed_at: datetime
