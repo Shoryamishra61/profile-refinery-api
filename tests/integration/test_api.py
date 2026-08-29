@@ -165,3 +165,42 @@ async def test_openapi_documents_security(client: httpx.AsyncClient) -> None:
     assert any(item.get("name") == "X-API-Key" for item in schemes.values())
     assert "/v1/batches" in document["paths"]
     assert "/v1/batches/{batch_id}/export" in document["paths"]
+
+
+@pytest.mark.asyncio
+async def test_core_only_payload_honestly_marks_sections_unavailable(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    """The live-verified default projection carries the core entity only
+    (section contracts retired: live 404). The response must mark sections
+    explicitly unavailable — never empty-as-failure, never fabricated."""
+    core_only = {
+        "data": {"*elements": ["urn:li:fsd_profile:ACoAA-test"]},
+        "included": [
+            {
+                "$type": "com.linkedin.voyager.dash.identity.profile.Profile",
+                "entityUrn": "urn:li:fsd_profile:ACoAA-test",
+                "publicIdentifier": "test-integration-profile",
+                "firstName": {"localized": {"en_US": "Integration"}},
+                "lastName": {"localized": {"en_US": "Check"}},
+                "headline": {"localized": {"en_US": "Core-only projection"}},
+            }
+        ],
+    }
+    stub_transport.set("profile_view", [core_only])
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["partial"] is True
+    assert body["status"] == "partial"
+    assert body["profile"]["name"]["value"] == "Integration Check"
+    experience = body["profile"]["experience"]
+    assert experience["value"] is None
+    assert experience["status"] == "not_available_from_endpoint"
+    assert body["meta"]["coverage"]["experience"] == "unavailable"
+    assert body["meta"]["coverage"]["languages"] == "unavailable"
+    assert body["retrieval"]["mode"] == "live" and body["retrieval"]["fixture"] is False
