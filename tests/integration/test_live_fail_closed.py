@@ -5,8 +5,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from conftest import StubTransport
 
-from tests.conftest import StubTransport
 from tross_linkedin_api.canonicalizer import canonicalize_profile_url
 from tross_linkedin_api.config import Settings
 from tross_linkedin_api.errors import LiveFixtureLeakDetected
