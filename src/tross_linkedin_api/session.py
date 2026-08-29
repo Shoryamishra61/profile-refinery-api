@@ -25,11 +25,14 @@ class SessionProvider:
         jsessionid = self._settings.linkedin_jsessionid
         if not li_at or not jsessionid:
             raise UpstreamAuthRequired()
-        jsession_value = jsessionid.get_secret_value()
+        # Operators commonly copy LinkedIn's quoted cookie value verbatim.
+        # Normalize once so the cookie jar adds exactly one pair of quotes and
+        # the CSRF header receives the same unquoted token.
+        jsession_value = jsessionid.get_secret_value().strip('"')
         return SessionMaterial(
             li_at=li_at.get_secret_value(),
             jsessionid=jsession_value,
-            csrf_token=jsession_value.strip('"'),
+            csrf_token=jsession_value,
         )
 
     def fail_closed(self) -> None:

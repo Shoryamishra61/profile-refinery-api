@@ -19,7 +19,9 @@ from .errors import (
 )
 from .metrics import METRICS
 from .models import ProfileResponse
+from .parsers import parse_section_payload
 from .rate_limit import SlidingWindowLimiter
+from .rsc import describe_rsc_payload
 from .runtime import Runtime
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -29,6 +31,14 @@ def _authorized(x_api_key: str | None, runtime: Runtime) -> str:
     if x_api_key is None or not any(
         hmac.compare_digest(x_api_key, expected) for expected in runtime.settings.api_key_values
     ):
+        raise UnauthorizedCaller()
+    return x_api_key
+
+
+def _authorized_validation(x_api_key: str | None, runtime: Runtime) -> str:
+    validation_key = runtime.settings.app_validation_api_key
+    expected = validation_key.get_secret_value() if validation_key else None
+    if x_api_key is None or expected is None or not hmac.compare_digest(x_api_key, expected):
         raise UnauthorizedCaller()
     return x_api_key
 
@@ -121,6 +131,37 @@ def build_router(runtime: Runtime) -> APIRouter:
         response.request_id = request_id
         response.status = "partial" if response.partial else "succeeded"
         return response
+
+    @router.get("/v1/protocol-probe", tags=["operations"], include_in_schema=False)
+    async def protocol_probe(
+        request: Request,
+        slug: Annotated[str, Query(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{0,99}$")],
+        member_id: Annotated[str, Query(pattern=r"^[A-Za-z0-9_-]{10,100}$")],
+        section: Annotated[
+            str, Query(pattern="^(experience|education|skills|certifications|languages)$")
+        ],
+        x_api_key: str | None = Security(API_KEY_HEADER),
+    ) -> JSONResponse:
+        """Controlled live protocol probe; no raw Flight data is returned."""
+
+        _authorized_validation(x_api_key, runtime)
+        contract = f"profile_{section}"
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        result = await runtime.governor.run(
+            contract,
+            lambda: runtime.transport.execute(contract, slug, request_id, member_id),
+        )
+        values = parse_section_payload(result.payload, section)
+        return JSONResponse(
+            {
+                "evidence_class": "live",
+                "operation": contract,
+                "status_code": result.status_code,
+                "item_count": len(values),
+                "items": values,
+                "diagnostics": describe_rsc_payload(result.payload),
+            }
+        )
 
     @router.post(
         "/v1/batches",

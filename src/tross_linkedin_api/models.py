@@ -54,10 +54,13 @@ class Experience(StrictModel):
     company_name: str | None = None
     company_urn: str | None = None
     company_url: str | None = None
+    employment_type: str | None = None
     start_date: DateValue | None = None
     end_date: DateValue | None = None
     is_current: bool | None = None
+    duration: str | None = None
     location: str | None = None
+    workplace_type: str | None = None
     description: str | None = None
     group_id: str | None = None
 
@@ -66,10 +69,13 @@ class Education(StrictModel):
     id: str | None = None
     school_name: str | None = None
     school_urn: str | None = None
+    school_url: str | None = None
     degree_name: str | None = None
     field_of_study: str | None = None
     start_date: DateValue | None = None
     end_date: DateValue | None = None
+    grade: str | None = None
+    activities: str | None = None
     description: str | None = None
 
 
@@ -83,6 +89,7 @@ class Certification(StrictModel):
     name: str
     authority: str | None = None
     license_number: str | None = None
+    credential_url: str | None = None
     start_date: DateValue | None = None
     end_date: DateValue | None = None
 

@@ -33,11 +33,17 @@ def test_registry_missing_fails_closed(tmp_path: Path) -> None:
         OperationRegistry.load(tmp_path / "missing.yaml")
 
 
-def test_project_registry_enables_both_live_operations() -> None:
+def test_project_registry_enables_live_core_page_and_rsc_sections() -> None:
     registry = OperationRegistry.load(REGISTRY)
-    # Section contracts are retired (live-observed 404, 2026-08-29); only the
-    # core finder and page fallback serve live traffic.
-    assert set(registry.enabled_names()) == {"profile_view", "profile_page"}
+    assert set(registry.enabled_names()) == {
+        "profile_view",
+        "profile_experience",
+        "profile_education",
+        "profile_skills",
+        "profile_certifications",
+        "profile_languages",
+        "profile_page",
+    }
 
 
 def test_disabled_or_unknown_evidence_is_never_active(tmp_path: Path) -> None:

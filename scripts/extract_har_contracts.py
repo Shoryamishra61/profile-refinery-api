@@ -7,9 +7,7 @@ Outputs to C:/tmp/har_extract/:
 """
 import json
 import os
-import sys
 from collections import Counter
-from urllib.parse import unquote
 
 HAR = r"C:\code_shit\TROSS\TROSS MANUS DATA\www.linkedin.com.bilgates.har"
 OUT = r"C:\tmp\har_extract"

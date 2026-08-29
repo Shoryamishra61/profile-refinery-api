@@ -14,7 +14,7 @@ from .errors import (
 from .governor import CircuitOpen, UpstreamGovernor
 from .models import OperationResult, ProfileResponse, ResponseMeta, Retrieval
 from .normalizer import normalize_profile
-from .operation_registry import OperationRegistry
+from .operation_registry import OperationRegistry, TransportKind
 from .parsers import parse_core_payload, parse_section_payload
 from .transport import Transport
 from .validation import SchemaValidator
@@ -33,6 +33,13 @@ SECTION_CARD_CONSTANTS = {
     "languages": "LANGUAGES",
 }
 SECTION_CONTRACTS = {name: f"profile_{name}" for name in SECTION_ORDER}
+RSC_CONTRACT_SECTIONS = {
+    "profile_experience": ("experience",),
+    "profile_education": ("education", "certifications"),
+    "profile_skills": ("skills",),
+    "profile_certifications": ("education", "certifications"),
+    "profile_languages": ("languages",),
+}
 LIVE_FIXTURE_SENTINELS = (
     "SYNTHETIC-001",
     "Synthetic Systems Ltd",
@@ -133,8 +140,9 @@ class ProfileOrchestrator:
         # session plan).
         member_urn = core["identity"].get("member_urn")
         member_id = member_urn.split(":")[-1] if member_urn else None
+        dedicated_observed: set[str] = set()
         for name in SECTION_ORDER:
-            if coverage.get(name) == COVERAGE_OBSERVED:
+            if coverage.get(name) == COVERAGE_OBSERVED or name in dedicated_observed:
                 continue
             contract = SECTION_CONTRACTS[name]
             if contract not in self._registry.enabled_names():
@@ -148,7 +156,12 @@ class ProfileOrchestrator:
                 warnings.append(f"{name}: member_identity_unresolved")
                 continue
             attempted.append(contract)
-            resource = f"{member_id}-{SECTION_CARD_CONSTANTS[name]}-en_US"
+            operation = self._registry.get(contract)
+            resource = (
+                member_id
+                if operation.kind is TransportKind.RSC
+                else f"{member_id}-{SECTION_CARD_CONSTANTS[name]}-en_US"
+            )
             try:
                 section_result = await self._execute(contract, canonical.slug, request_id, resource)
             except CircuitOpen:
@@ -175,8 +188,19 @@ class ProfileOrchestrator:
                 warnings.append(f"{name}: {type(exc).__name__}")
                 continue
             succeeded.append(contract)
-            sections[name] = parse_section_payload(section_result.payload, name)
-            coverage[name] = COVERAGE_EMPTY if not sections[name] else COVERAGE_OBSERVED
+            returned_sections = (
+                RSC_CONTRACT_SECTIONS[contract]
+                if operation.kind is TransportKind.RSC
+                else (name,)
+            )
+            for returned_name in returned_sections:
+                sections[returned_name] = parse_section_payload(
+                    section_result.payload, returned_name
+                )
+                coverage[returned_name] = (
+                    COVERAGE_EMPTY if not sections[returned_name] else COVERAGE_OBSERVED
+                )
+                dedicated_observed.add(returned_name)
 
         profile = normalize_profile(
             canonical.slug, core, sections, timestamp, section_failures=section_failures

@@ -20,6 +20,7 @@ from .errors import (
 from .models import OperationResult
 from .observability import OperationEvent, log_operation
 from .operation_registry import Operation, OperationRegistry, TransportKind
+from .rsc import build_profile_activity_body, build_profile_component_body
 from .session import SessionProvider
 
 UPSTREAM_ORIGIN = "https://www.linkedin.com"
@@ -196,13 +197,120 @@ class LinkedInTransport:
             "accept-language": self._settings.linkedin_accept_language,
         }
 
+    def _rsc_headers(self, slug: str) -> dict[str, str]:
+        self._session.load()
+        return {
+            "accept": "*/*",
+            "accept-language": self._settings.linkedin_accept_language,
+            "content-type": "application/json",
+            "csrf-token": self._csrf_token(),
+            "origin": UPSTREAM_ORIGIN,
+            "referer": f"{UPSTREAM_ORIGIN}/in/{slug}/",
+            "user-agent": self._settings.linkedin_user_agent,
+            "x-li-anchor-page-key": "d_flagship3_profile_view_base",
+            "x-li-rsc-stream": "true",
+        }
+
     async def execute(
         self, semantic_name: str, slug: str, request_id: str, resource_id: str | None = None
     ) -> OperationResult:
         operation = self._registry.get(semantic_name)
         if operation.kind is TransportKind.HTML:
             return await self._execute_page(operation, slug, request_id)
+        if operation.kind is TransportKind.RSC:
+            return await self._execute_rsc(operation, slug, request_id, resource_id)
         return await self._execute_restli(operation, slug, request_id, resource_id)
+
+    async def _execute_rsc(
+        self,
+        operation: Operation,
+        slug: str,
+        request_id: str,
+        viewee_id: str | None,
+    ) -> OperationResult:
+        if not operation.component_id or (
+            operation.request_variant == "profile_section" and not viewee_id
+        ):
+            raise UpstreamOperationDrift(
+                operation.semantic_name, "RSC request lacks component or target identity."
+            )
+        started = time.perf_counter()
+        url = f"{UPSTREAM_ORIGIN}{operation.path}"
+        params = {
+            "componentId": operation.component_id,
+            "sduiid": operation.component_id,
+        }
+        body = (
+            build_profile_activity_body(slug)
+            if operation.request_variant == "profile_activity"
+            else build_profile_component_body(slug, viewee_id or "")
+        )
+        try:
+            async with self._client.stream(
+                "POST",
+                url,
+                params=params,
+                headers=self._rsc_headers(slug),
+                content=json.dumps(body, separators=(",", ":")).encode(),
+            ) as response:
+                self.call_count += 1
+                duration = (time.perf_counter() - started) * 1000
+                if response.is_redirect:
+                    location = response.headers.get("location", "")
+                    if "authwall" in location or "login" in location:
+                        self._session.fail_closed()
+                        raise UpstreamAuthExpired()
+                    raise UpstreamChallenge()
+                if response.status_code == 401:
+                    self._session.fail_closed()
+                    raise UpstreamAuthExpired()
+                if response.status_code == 403:
+                    raise UpstreamChallenge()
+                if response.status_code == 404:
+                    raise UpstreamOperationDrift(
+                        operation.semantic_name, "RSC component operation returned 404."
+                    )
+                if response.status_code == 429:
+                    raise UpstreamRateLimited()
+                if response.status_code >= 500:
+                    raise UpstreamTimeout(operation.semantic_name)
+                if response.status_code >= 300:
+                    raise UpstreamOperationDrift(
+                        operation.semantic_name,
+                        f"Unexpected RSC status class: {response.status_code // 100}xx",
+                    )
+                media_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+                raw = await self._read_limited(response, operation.semantic_name)
+                if media_type != "application/octet-stream":
+                    raise UpstreamOperationDrift(
+                        operation.semantic_name, "RSC operation returned an unexpected media type."
+                    )
+                try:
+                    flight = raw.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise UpstreamOperationDrift(
+                        operation.semantic_name, "RSC operation returned non-UTF-8 Flight data."
+                    ) from exc
+                log_operation(
+                    OperationEvent(
+                        request_id,
+                        operation.semantic_name,
+                        duration,
+                        response.status_code,
+                        "pending",
+                        1,
+                    )
+                )
+                return OperationResult(
+                    operation=operation.semantic_name,
+                    payload={"flight": flight, "component_id": operation.component_id},
+                    duration_ms=duration,
+                    status_code=response.status_code,
+                )
+        except httpx.TimeoutException as exc:
+            raise UpstreamTimeout(operation.semantic_name) from exc
+        except (httpx.ConnectError, httpx.ReadError) as exc:
+            raise UpstreamTimeout(operation.semantic_name) from exc
 
     async def _execute_restli(
         self, operation: Operation, slug: str, request_id: str, resource_id: str | None = None

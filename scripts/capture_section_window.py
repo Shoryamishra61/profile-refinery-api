@@ -8,18 +8,19 @@ succeeds the live payload is saved and the section contract can be promoted.
 Run after a fresh login. One attempt per invocation — never a retry loop.
 """
 import asyncio
+import json
 import os
 import sys
+from pathlib import Path
 
 LI_AT = os.environ["TROSS_LI_AT"]
 JSESSIONID = os.environ["TROSS_JSESSIONID"]
 MEMBER_ID = os.environ.get("TROSS_MEMBER_ID", "ACoAAA8BYqEBCGLg_vT_ca6mMEqkpp9nVffJ3hc")
-OUT = os.environ.get("TROSS_OUT", "C:/tmp/card_experience_live.json")
+OUT = Path(os.environ.get("TROSS_OUT", "C:/tmp/card_experience_live.json"))
 
 
 async def main() -> None:
     os.environ.setdefault("APP_API_KEYS", "capture")
-    from pathlib import Path
 
     from tross_linkedin_api.config import Settings
     from tross_linkedin_api.errors import ProblemError
@@ -43,8 +44,11 @@ async def main() -> None:
         )
         graph = NormalizedGraph(result.payload)
         positions = parse_experience(graph)
-        with open(OUT, "w", encoding="utf-8") as fh:
-            json.dump(result.payload, fh, indent=1, ensure_ascii=False)
+        await asyncio.to_thread(
+            OUT.write_text,
+            json.dumps(result.payload, indent=1, ensure_ascii=False),
+            encoding="utf-8",
+        )
         print(f"SECTION CAPTURED: {len(result.payload.get('included', []))} entities, "
               f"{len(positions)} owned positions", flush=True)
         for position in positions:

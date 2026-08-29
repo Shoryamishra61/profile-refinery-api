@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from tross_linkedin_api.errors import ProfileNotFound, UpstreamTimeout
+from tross_linkedin_api.errors import ProfileNotFound, UpstreamOperationDrift, UpstreamTimeout
 
 
 @pytest.mark.asyncio
@@ -171,9 +171,7 @@ async def test_openapi_documents_security(client: httpx.AsyncClient) -> None:
 async def test_core_only_payload_honestly_marks_sections_unavailable(
     client: httpx.AsyncClient, stub_transport: object
 ) -> None:
-    """The live-verified default projection carries the core entity only
-    (section contracts retired: live 404). The response must mark sections
-    explicitly unavailable — never empty-as-failure, never fabricated."""
+    """Section-operation failures remain unavailable, never empty-as-failure."""
     core_only = {
         "data": {"*elements": ["urn:li:fsd_profile:ACoAA-test"]},
         "included": [
@@ -188,6 +186,11 @@ async def test_core_only_payload_honestly_marks_sections_unavailable(
         ],
     }
     stub_transport.set("profile_view", [core_only])
+    for section in ("experience", "education", "skills", "certifications", "languages"):
+        stub_transport.set(
+            f"profile_{section}",
+            [UpstreamOperationDrift(f"profile_{section}", "scripted failure")],
+        )
     response = await client.get(
         "/v1/profiles",
         params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
@@ -200,7 +203,7 @@ async def test_core_only_payload_honestly_marks_sections_unavailable(
     assert body["profile"]["name"]["value"] == "Integration Check"
     experience = body["profile"]["experience"]
     assert experience["value"] is None
-    assert experience["status"] == "not_available_from_endpoint"
+    assert experience["status"] == "upstream_failed"
     assert body["meta"]["coverage"]["experience"] == "unavailable"
     assert body["meta"]["coverage"]["languages"] == "unavailable"
     assert body["retrieval"]["mode"] == "live" and body["retrieval"]["fixture"] is False

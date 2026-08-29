@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -20,6 +21,7 @@ class EvidenceStatus(StrEnum):
 class TransportKind(StrEnum):
     RESTLI = "restli"
     HTML = "html"
+    RSC = "rsc"
 
 
 class Operation(BaseModel):
@@ -34,6 +36,8 @@ class Operation(BaseModel):
     transport_family: str
     parser: str
     decoration_ids: list[str] = Field(default_factory=list)
+    component_id: str | None = None
+    request_variant: Literal["profile_section", "profile_activity"] = "profile_section"
     observed_at: datetime | None = None
     fixture: str | None = None
     evidence_reference: str
@@ -47,6 +51,12 @@ class Operation(BaseModel):
             raise ValueError("operation path must be an absolute safe LinkedIn path")
         if self.enabled and not self.parser:
             raise ValueError("enabled operations require a parser")
+        if self.kind is TransportKind.RSC and not self.component_id:
+            raise ValueError("rsc operations require component_id")
+        if self.kind is not TransportKind.RSC and self.component_id:
+            raise ValueError("component_id is only valid for rsc operations")
+        if self.kind is not TransportKind.RSC and self.request_variant != "profile_section":
+            raise ValueError("request_variant is only valid for rsc operations")
         return self
 
 

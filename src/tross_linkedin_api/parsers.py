@@ -27,8 +27,9 @@ from .graph import (
     NormalizedGraph,
     TargetProfileMissing,
 )
+from .rsc import RSC_PARSER_VERSION, parse_rsc_core_payload, parse_rsc_section_payload
 
-PARSER_VERSION = "normalized-graph-v2"
+PARSER_VERSION = f"normalized-graph-v2+{RSC_PARSER_VERSION}"
 
 SECTION_ENTITY_SUFFIXES = {
     "experience": ".position",
@@ -308,6 +309,11 @@ def parse_core_payload(payload: dict[str, Any], slug: str) -> dict[str, Any]:
     A 200 whose graph carries no resolvable target Profile is schema drift:
     typed failure, never a guessed profile.
     """
+    if "flight" in payload:
+        return {
+            "core": parse_rsc_core_payload(payload, slug),
+            "sections": {name: [] for name in SECTION_ENTITY_SUFFIXES},
+        }
     graph = NormalizedGraph(payload, slug=slug)
     try:
         core = parse_core(graph)
@@ -320,7 +326,9 @@ def parse_core_payload(payload: dict[str, Any], slug: str) -> dict[str, Any]:
 
 
 def parse_section_payload(payload: dict[str, Any], section: str) -> list[dict[str, Any]]:
-    """Parse a section (profileCards) response. Root-referenced ownership."""
+    """Parse an RSC or historical normalized profile-card response."""
+    if "flight" in payload:
+        return parse_rsc_section_payload(payload, section)
     graph = NormalizedGraph(payload)
     parser = {
         "experience": parse_experience,

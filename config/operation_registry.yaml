@@ -1,81 +1,79 @@
 version: 2
 operations:
-  # PRIMARY. LIVE_VERIFIED 2026-08-29: observed HTTP 200 with a real member
-  # payload — identity/URN/publicIdentifier/name/headline/summary/images all
-  # normalized from the included[] Profile entity.
+  # PRIMARY. LIVE_VERIFIED 2026-08-29: vanity-only direct RSC Activity request
+  # returned the target-owned prioritizedProfileId and semantic SetState
+  # actions for real name, headline, and profile image. No DOM or browser.
   - semantic_name: profile_view
     enabled: true
     evidence_status: live_verified
-    kind: restli
-    method: GET
-    path: /voyager/api/identity/dash/profiles
-    transport_family: restli
-    parser: full_profile_v1
-    decoration_ids: []
+    kind: rsc
+    method: POST
+    path: /flagship-web/rsc-action/actions/component
+    transport_family: react_flight
+    parser: linkedin_sdui_flight_v1
+    component_id: com.linkedin.sdui.generated.profile.dsl.impl.profileCardsActivity
+    request_variant: profile_activity
     observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#dash-profiles
-  # Section contracts (governing spec §6). RETIRED per live evidence:
-  # on 2026-08-29 an authenticated request to this resource answered HTTP 404
-  # (HTML error page) — the profileCards restli resource no longer exists.
-  # The modern profile page loads sections through SDUI rsc-action component
-  # payloads (rendered React-flight), which is out of scope (spec §M: no new
-  # scraping architecture in the final window). Sections are therefore served
-  # with explicit unavailable semantics until a clean contract re-emerges.
+  # Current SDUI/React Flight section contracts. LIVE_VERIFIED 2026-08-29:
+  # direct HTTP POSTs returned real profile-specific Experience, Education,
+  # Skills, Certifications, and an honestly empty Languages component without
+  # dynamic trace/page-instance headers or browser execution.
   - semantic_name: profile_experience
-    enabled: false
-    evidence_status: disabled
-    kind: restli
-    method: GET
-    path: /voyager/api/identity/dash/profileCards/{resource_id}
-    transport_family: restli
-    parser: experience_v1
-    decoration_ids: []
+    enabled: true
+    evidence_status: live_verified
+    kind: rsc
+    method: POST
+    path: /flagship-web/rsc-action/actions/component
+    transport_family: react_flight
+    parser: linkedin_sdui_flight_v1
+    component_id: com.linkedin.sdui.generated.profile.dsl.impl.profileCardsExperienceOnly
     observed_at: 2026-08-29T00:00:00Z
-    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#rsc-profile-cards
   - semantic_name: profile_education
-    enabled: false
-    evidence_status: disabled
-    kind: restli
-    method: GET
-    path: /voyager/api/identity/dash/profileCards/{resource_id}
-    transport_family: restli
-    parser: education_v1
-    decoration_ids: []
+    enabled: true
+    evidence_status: live_verified
+    kind: rsc
+    method: POST
+    path: /flagship-web/rsc-action/actions/component
+    transport_family: react_flight
+    parser: linkedin_sdui_flight_v1
+    component_id: com.linkedin.sdui.generated.profile.dsl.impl.profileCardsBelowActivityPart1WithoutExp
     observed_at: 2026-08-29T00:00:00Z
-    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#rsc-profile-cards
   - semantic_name: profile_skills
-    enabled: false
-    evidence_status: disabled
-    kind: restli
-    method: GET
-    path: /voyager/api/identity/dash/profileCards/{resource_id}
-    transport_family: restli
-    parser: skills_v1
-    decoration_ids: []
+    enabled: true
+    evidence_status: live_verified
+    kind: rsc
+    method: POST
+    path: /flagship-web/rsc-action/actions/component
+    transport_family: react_flight
+    parser: linkedin_sdui_flight_v1
+    component_id: com.linkedin.sdui.generated.profile.dsl.impl.profileCardsBelowActivityPart7
     observed_at: 2026-08-29T00:00:00Z
-    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#rsc-profile-cards
   - semantic_name: profile_certifications
-    enabled: false
-    evidence_status: disabled
-    kind: restli
-    method: GET
-    path: /voyager/api/identity/dash/profileCards/{resource_id}
-    transport_family: restli
-    parser: certifications_v1
-    decoration_ids: []
+    enabled: true
+    evidence_status: live_verified
+    kind: rsc
+    method: POST
+    path: /flagship-web/rsc-action/actions/component
+    transport_family: react_flight
+    parser: linkedin_sdui_flight_v1
+    component_id: com.linkedin.sdui.generated.profile.dsl.impl.profileCardsBelowActivityPart1WithoutExp
     observed_at: 2026-08-29T00:00:00Z
-    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#rsc-profile-cards
   - semantic_name: profile_languages
-    enabled: false
-    evidence_status: disabled
-    kind: restli
-    method: GET
-    path: /voyager/api/identity/dash/profileCards/{resource_id}
-    transport_family: restli
-    parser: languages_v1
-    decoration_ids: []
+    enabled: true
+    evidence_status: live_verified
+    kind: rsc
+    method: POST
+    path: /flagship-web/rsc-action/actions/component
+    transport_family: react_flight
+    parser: linkedin_sdui_flight_v1
+    component_id: com.linkedin.sdui.generated.profile.dsl.impl.profileCardsBelowActivityPart4
     observed_at: 2026-08-29T00:00:00Z
-    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
+    evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#rsc-profile-cards
   # Speculative full-profile decoration: disabled — unverified, and a failed
   # attempt consumes scarce session budget (governing spec §3.5: no
   # speculative section fan-out). Re-enable only after live verification.

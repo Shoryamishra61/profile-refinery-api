@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import httpx
@@ -16,11 +17,12 @@ from tross_linkedin_api.errors import (
     UpstreamRateLimited,
     UpstreamTimeout,
 )
-from tross_linkedin_api.operation_registry import OperationRegistry
+from tross_linkedin_api.operation_registry import OperationRegistry, RegistryDocument
 from tross_linkedin_api.session import SessionProvider
 from tross_linkedin_api.transport import LinkedInTransport
 
 DASH_PATH = "/voyager/api/identity/dash/profiles"
+RSC_PATH = "/flagship-web/rsc-action/actions/component"
 
 
 def live_components(
@@ -34,7 +36,55 @@ def live_components(
         linkedin_jsessionid='"ajax:test-session"',
         app_upstream_retries=0,
     )
-    registry = OperationRegistry.load(Path("config/operation_registry.yaml"))
+    registry = OperationRegistry(
+        RegistryDocument.model_validate(
+            {
+                "version": 2,
+                "operations": [
+                    {
+                        "semantic_name": "profile_view",
+                        "enabled": True,
+                        "evidence_status": "historical",
+                        "kind": "restli",
+                        "method": "GET",
+                        "path": DASH_PATH,
+                        "transport_family": "restli",
+                        "parser": "full_profile_v1",
+                        "observed_at": "2026-08-28T00:00:00Z",
+                        "evidence_reference": "test",
+                    },
+                    {
+                        "semantic_name": "profile_experience",
+                        "enabled": True,
+                        "evidence_status": "live_verified",
+                        "kind": "rsc",
+                        "method": "POST",
+                        "path": RSC_PATH,
+                        "transport_family": "react_flight",
+                        "parser": "linkedin_sdui_flight_v1",
+                        "component_id": (
+                            "com.linkedin.sdui.generated.profile.dsl.impl."
+                            "profileCardsExperienceOnly"
+                        ),
+                        "observed_at": "2026-08-29T00:00:00Z",
+                        "evidence_reference": "test",
+                    },
+                    {
+                        "semantic_name": "profile_page",
+                        "enabled": True,
+                        "evidence_status": "historical",
+                        "kind": "html",
+                        "method": "GET",
+                        "path": "/in/{slug}/",
+                        "transport_family": "web",
+                        "parser": "full_profile_v1",
+                        "observed_at": "2026-08-28T00:00:00Z",
+                        "evidence_reference": "test",
+                    },
+                ],
+            }
+        )
+    )
     session = SessionProvider(settings)
     transport = LinkedInTransport(settings, registry, session)
     return settings, registry, session, transport
@@ -92,10 +142,42 @@ async def test_restli_request_carries_csrf_and_session_cookies(monkeypatch) -> N
     cookie_header = request.headers.get("cookie", "")
     assert "li_at=test-li-at-value" in cookie_header
     assert "ajax%3Atest-session" in cookie_header or "ajax:test-session" in cookie_header
+    assert '""ajax' not in cookie_header
     assert request.headers["x-restli-protocol-version"] == "2.0.0"
     assert "memberIdentity=some-person" in str(request.url)
     assert "decorationId" not in str(request.url)
     assert result.payload == valid_payload()
+
+
+@respx.mock
+async def test_rsc_request_uses_minimal_semantic_contract_without_telemetry(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    route = respx.post(f"https://www.linkedin.com{RSC_PATH}").mock(
+        return_value=Response(
+            200,
+            content=b'0:{"children":["captured"]}\n',
+            headers={"content-type": "application/octet-stream"},
+        )
+    )
+    result = await transport.execute(
+        "profile_experience", "some-person", "req-rsc", "ACoSANITIZED"
+    )
+    await transport.aclose()
+
+    request = route.calls.last.request
+    query = str(request.url)
+    assert "componentId=" in query and "sduiid=" in query
+    assert "parentSpanId" not in query
+    assert request.headers["csrf-token"] == "ajax:test-session"
+    assert request.headers["x-li-anchor-page-key"] == "d_flagship3_profile_view_base"
+    assert request.headers["x-li-rsc-stream"] == "true"
+    assert "x-li-page-instance" not in request.headers
+    assert "x-li-traceparent" not in request.headers
+    body = json.loads(request.content)
+    payload = body["clientArguments"]["payload"]
+    assert payload["vanityName"] == "some-person"
+    assert payload["replaceableSectionArgs"]["vieweeProfileId"] == "ACoSANITIZED"
+    assert result.payload["flight"].startswith("0:")
 
 
 @respx.mock

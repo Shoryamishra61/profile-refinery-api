@@ -7,7 +7,6 @@ patient, low-volume window detector.
 """
 import asyncio
 import os
-import subprocess
 import sys
 
 LI_AT = os.environ["TROSS_LI_AT"]
@@ -45,7 +44,7 @@ async def probe_window() -> bool:
             tail = out.decode("utf-8", errors="replace")[-400:]
             print(tail, flush=True)
             return proc.returncode == 0
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             return False
@@ -68,7 +67,7 @@ async def main() -> None:
                 out, _ = await asyncio.wait_for(proc.communicate(), timeout=3300)
                 print(out.decode("utf-8", errors="replace")[-2500:], flush=True)
                 print(f"ACCEPTANCE rc={proc.returncode}", flush=True)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.wait()
                 print("ACCEPTANCE TIMED OUT", flush=True)

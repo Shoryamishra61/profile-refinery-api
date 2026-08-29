@@ -30,13 +30,19 @@ class Settings(BaseSettings):
     )
 
     app_api_keys: ApiKeys = Field(min_length=1)
+    # Optional additive key used for controlled deployment verification and
+    # rotation without invalidating existing callers.
+    app_validation_api_key: SecretStr | None = None
     app_mode: AppMode = AppMode.LIVE
     app_rate_limit_requests: int = Field(default=30, ge=1, le=10_000)
     app_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3_600)
     app_schema_path: Path = Path("schemas/profile-response.schema.json")
     app_operation_registry_path: Path = Path("config/operation_registry.yaml")
     app_upstream_timeout_seconds: float = Field(default=12.0, gt=0, le=60)
-    app_upstream_max_bytes: int = Field(default=5_000_000, ge=1024, le=20_000_000)
+    # Activity Flight currently carries the target identity resolver in a
+    # 5-7 MB stream. Eight MB is a measured protocol ceiling, not an open-ended
+    # download allowance; the transport still aborts while streaming.
+    app_upstream_max_bytes: int = Field(default=8_000_000, ge=1024, le=20_000_000)
     app_upstream_retries: int = Field(default=1, ge=0, le=3)
     # Upstream governor: the single control plane for all LinkedIn traffic.
     app_upstream_concurrency: int = Field(default=2, ge=1, le=10)
@@ -64,4 +70,7 @@ class Settings(BaseSettings):
 
     @property
     def api_key_values(self) -> tuple[str, ...]:
-        return tuple(key.get_secret_value() for key in self.app_api_keys)
+        values = [key.get_secret_value() for key in self.app_api_keys]
+        if self.app_validation_api_key:
+            values.append(self.app_validation_api_key.get_secret_value())
+        return tuple(values)
