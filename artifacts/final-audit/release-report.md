@@ -108,3 +108,9 @@ profile image: media.licdn.com/dms/image/v2/… (constructed from live artifacts
 See README → Limitations. Principal: client fingerprinting (evasion rejected on
 principle), session expiry runbook, section contracts pending live verification,
 ephemeral journal on serverless.
+$ healthz
+{"status":"ok"}
+$ readyz
+{"status":"ready","extraction_capability":{"state":"CLOSED","detail":"Extraction available under rate budget.","governor":{"breaker":{"state":"CLOSED","consecut
+$ profile (live attempt)
+{"type":"https://tross.dev/problems/upstream-challenge","title":"Upstream security challenge","status":503,"detail":"Live requests stopped; manual operator action is required.","instance":"/v1/profiles","code":"UPSTREAM_CHALLENGE","request_id":"2cceabda-36bf-415b-be32-149e7b10359e"}
