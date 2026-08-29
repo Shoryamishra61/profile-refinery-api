@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from conftest import FULL_PROFILE_FIXTURE
 
-from tross_linkedin_api.errors import ProfileNotFound, UpstreamOperationDrift, UpstreamTimeout
+from tross_linkedin_api.errors import (
+    ProfileNotFound,
+    UpstreamChallenge,
+    UpstreamOperationDrift,
+    UpstreamTimeout,
+)
 
 
 @pytest.mark.asyncio
@@ -132,17 +138,72 @@ async def test_profile_not_found_maps_to_404(
 
 
 @pytest.mark.asyncio
-async def test_fallback_strategy_used_when_primary_drifts(
+async def test_invalid_rsc_core_falls_back_to_valid_profile_page(
     client: httpx.AsyncClient, stub_transport: object
 ) -> None:
-    stub_transport.set("profile_view", [])
+    stub_transport.set("profile_view", [{"flight": '0:{"children":[]}\n'}])
+    stub_transport.set("profile_page", [FULL_PROFILE_FIXTURE])
     response = await client.get(
         "/v1/profiles",
         params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
         headers={"X-API-Key": "test-api-key"},
     )
     assert response.status_code == 200
-    assert response.json()["meta"]["transport_strategy"] == "profile_page"
+    meta = response.json()["meta"]
+    assert meta["transport_strategy"] == "profile_page"
+    assert meta["operations_attempted"][:2] == ["profile_view", "profile_page"]
+    assert meta["operations_succeeded"][0] == "profile_page"
+
+
+@pytest.mark.asyncio
+async def test_valid_profile_view_core_does_not_call_profile_page(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    stub_transport.set("profile_view", [FULL_PROFILE_FIXTURE])
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    assert response.json()["meta"]["transport_strategy"] == "profile_view"
+    assert [operation for operation, _ in stub_transport.seen] == ["profile_view"]
+
+
+@pytest.mark.asyncio
+async def test_profile_view_challenge_is_terminal_without_page_fallback(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    stub_transport.set("profile_view", [UpstreamChallenge()])
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 503
+    assert response.json()["code"] == "UPSTREAM_CHALLENGE"
+    assert [operation for operation, _ in stub_transport.seen] == ["profile_view"]
+
+
+@pytest.mark.asyncio
+async def test_parser_drift_in_both_core_operations_is_typed_without_fake_profile(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    stub_transport.set("profile_view", [{"flight": '0:{"children":[]}\n'}])
+    stub_transport.set("profile_page", [{"data": {}, "included": []}])
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 502
+    assert response.json()["code"] == "UPSTREAM_OPERATION_DRIFT"
+    assert [operation for operation, _ in stub_transport.seen] == [
+        "profile_view",
+        "profile_page",
+    ]
+    assert "profile" not in response.json()
+    assert "SYNTHETIC" not in response.text
 
 
 @pytest.mark.asyncio

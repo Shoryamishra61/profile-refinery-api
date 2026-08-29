@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 from .canonicalizer import CanonicalProfile
 from .errors import (
@@ -99,13 +100,17 @@ class ProfileOrchestrator:
         coverage: dict[str, str] = {}
         last_error: UpstreamFailure | None = None
 
-        result = None
+        result: OperationResult | None = None
+        parsed: dict[str, Any] | None = None
         for semantic_name in (PRIMARY_OPERATION, FALLBACK_OPERATION):
             if semantic_name not in self._registry.enabled_names():
                 continue
             attempted.append(semantic_name)
             try:
-                result = await self._execute(semantic_name, canonical.slug, request_id)
+                candidate = await self._execute(semantic_name, canonical.slug, request_id)
+                parsed_candidate = parse_core_payload(candidate.payload, canonical.slug)
+                result = candidate
+                parsed = parsed_candidate
                 break
             except ProfileNotFound:
                 raise
@@ -121,14 +126,13 @@ class ProfileOrchestrator:
                     # would only be rejected by the freshly-opened breaker and
                     # mask this code behind UPSTREAM_CIRCUIT_OPEN.
                     raise
-        if result is None:
+        if result is None or parsed is None:
             if last_error is not None:
                 raise last_error
             raise UpstreamOperationUnavailable()
 
         strategy = result.operation
         succeeded.append(strategy)
-        parsed = parse_core_payload(result.payload, canonical.slug)
         core = parsed["core"]
         sections = dict(parsed["sections"])
         for name, values in sections.items():

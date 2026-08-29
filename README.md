@@ -131,7 +131,7 @@ uv run mypy
 uv run python scripts/security_audit.py
 ```
 
-Current acceptance-suite count: `126` tests. This count is updated
+Current acceptance-suite count: `129` tests. This count is updated
 from the full `pytest` run; it is not evidence of live LinkedIn extraction.
 
 ## Safety boundary
