@@ -150,9 +150,7 @@ class ProfileOrchestrator:
             attempted.append(contract)
             resource = f"{member_id}-{SECTION_CARD_CONSTANTS[name]}-en_US"
             try:
-                section_result = await self._execute(
-                    contract, canonical.slug, request_id, resource
-                )
+                section_result = await self._execute(contract, canonical.slug, request_id, resource)
             except CircuitOpen:
                 raise
             except UpstreamChallenge:

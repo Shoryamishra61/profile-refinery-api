@@ -10,6 +10,7 @@ traffic — and validate the guarantees the architecture claims:
 * request coalescing: duplicate profiles share one extraction
 * rate budget: bursts are throttled by the token bucket
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -95,15 +96,11 @@ def slugs(count: int) -> str:
     return "\n".join(f"https://www.linkedin.com/in/load-person-{i}/" for i in range(count))
 
 
-async def run_batch(
-    client: httpx.AsyncClient, text: str, wait: float = 20.0
-) -> tuple[dict, str]:
+async def run_batch(client: httpx.AsyncClient, text: str, wait: float = 20.0) -> tuple[dict, str]:
     created = await client.post("/v1/batches", params={"text": text}, headers=AUTH)
     assert created.status_code == 202, created.text
     batch_id = created.json()["batch_id"]
-    final = await client.get(
-        f"/v1/batches/{batch_id}", params={"wait_seconds": wait}, headers=AUTH
-    )
+    final = await client.get(f"/v1/batches/{batch_id}", params={"wait_seconds": wait}, headers=AUTH)
     return final.json(), batch_id
 
 
@@ -156,7 +153,9 @@ async def test_retry_containment_thirty_failures(tmp_path: Any) -> None:
 
 async def test_circuit_breaker_opens_recovers_via_single_probe(tmp_path: Any) -> None:
     upstream = FakeUpstream(mode="challenge")
-    settings = build_settings(tmp_path, app_breaker_failure_threshold=3, app_breaker_cooldown_seconds=0.2)
+    settings = build_settings(
+        tmp_path, app_breaker_failure_threshold=3, app_breaker_cooldown_seconds=0.2
+    )
     runtime = Runtime(settings, transport=upstream)
     app = create_app(runtime=runtime)
     async with httpx.AsyncClient(
@@ -199,7 +198,9 @@ async def test_circuit_breaker_opens_recovers_via_single_probe(tmp_path: Any) ->
 @pytest.mark.asyncio
 async def test_half_open_probe_failure_reopens_breaker(tmp_path: Any) -> None:
     upstream = FakeUpstream(mode="challenge")
-    settings = build_settings(tmp_path, app_breaker_failure_threshold=1, app_breaker_cooldown_seconds=0.1)
+    settings = build_settings(
+        tmp_path, app_breaker_failure_threshold=1, app_breaker_cooldown_seconds=0.1
+    )
     runtime = Runtime(settings, transport=upstream)
     app = create_app(runtime=runtime)
     async with httpx.AsyncClient(
@@ -306,7 +307,9 @@ async def test_challenge_breaker_recovery_keeps_session_configured(tmp_path: Any
     """A challenge pauses extraction (breaker OPEN) without destroying the
     configured session; after cooldown the probe restores extraction."""
     upstream = FakeUpstream(mode="challenge")
-    settings = build_settings(tmp_path, app_breaker_failure_threshold=1, app_breaker_cooldown_seconds=0.1)
+    settings = build_settings(
+        tmp_path, app_breaker_failure_threshold=1, app_breaker_cooldown_seconds=0.1
+    )
     runtime = Runtime(settings, transport=upstream)
     assert runtime.session.available is True
     app = create_app(runtime=runtime)

@@ -4,6 +4,7 @@ Counters and gauges only — enough for the observability contract (request
 totals, upstream operation outcomes, breaker state, queue depth/age, retry
 totals, jobs by state) without adding a dependency.
 """
+
 from __future__ import annotations
 
 import time

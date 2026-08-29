@@ -1,4 +1,5 @@
 """Graph-based parser tests, including the live-observed dash shapes."""
+
 from __future__ import annotations
 
 import json
@@ -71,12 +72,21 @@ def test_section_payload_ownership_excludes_unreferenced_entities() -> None:
             "*elements": ["urn:li:fsd_skill:(ACoX,1)"],
         },
         "included": [
-            {"$type": "com.linkedin.voyager.dash.identity.profile.Skill",
-             "entityUrn": "urn:li:fsd_skill:(ACoX,1)", "name": {"localized": {"en_US": "Owned"}}},
-            {"$type": "com.linkedin.voyager.dash.identity.profile.Skill",
-             "entityUrn": "urn:li:fsd_skill:(ACoFOREIGN,9)", "name": {"localized": {"en_US": "LEAK"}}},
-            {"$type": "com.linkedin.voyager.dash.identity.profile.Position",
-             "entityUrn": "urn:li:fsd_position:(ACoFOREIGN,2)", "title": {"localized": {"en_US": "LEAK"}}},
+            {
+                "$type": "com.linkedin.voyager.dash.identity.profile.Skill",
+                "entityUrn": "urn:li:fsd_skill:(ACoX,1)",
+                "name": {"localized": {"en_US": "Owned"}},
+            },
+            {
+                "$type": "com.linkedin.voyager.dash.identity.profile.Skill",
+                "entityUrn": "urn:li:fsd_skill:(ACoFOREIGN,9)",
+                "name": {"localized": {"en_US": "LEAK"}},
+            },
+            {
+                "$type": "com.linkedin.voyager.dash.identity.profile.Position",
+                "entityUrn": "urn:li:fsd_position:(ACoFOREIGN,2)",
+                "title": {"localized": {"en_US": "LEAK"}},
+            },
         ],
     }
     skills = parse_section_payload(payload, "skills")
@@ -86,8 +96,17 @@ def test_section_payload_ownership_excludes_unreferenced_entities() -> None:
 def test_200_with_wrong_projection_is_controlled_drift() -> None:
     """A 200 whose graph has no target Profile must fail typed, not invent."""
     with pytest.raises(UpstreamOperationDrift):
-        parse_core_payload({"included": [{"$type": "com.linkedin.voyager.dash.company.Company",
-                                          "entityUrn": "urn:li:fsd_company:1"}]}, "someone")
+        parse_core_payload(
+            {
+                "included": [
+                    {
+                        "$type": "com.linkedin.voyager.dash.company.Company",
+                        "entityUrn": "urn:li:fsd_company:1",
+                    }
+                ]
+            },
+            "someone",
+        )
 
 
 def test_missing_section_semantics_observed_empty() -> None:
@@ -95,8 +114,11 @@ def test_missing_section_semantics_observed_empty() -> None:
     payload = {
         "data": {"*elements": ["urn:li:fsd_profile:u1"]},
         "included": [
-            {"$type": "com.linkedin.voyager.dash.identity.profile.Profile",
-             "entityUrn": "urn:li:fsd_profile:u1", "publicIdentifier": "u1"},
+            {
+                "$type": "com.linkedin.voyager.dash.identity.profile.Profile",
+                "entityUrn": "urn:li:fsd_profile:u1",
+                "publicIdentifier": "u1",
+            },
         ],
     }
     parsed = parse_full_profile(payload, slug="u1")
@@ -117,10 +139,13 @@ def test_legacy_localized_fixture_shapes_still_parse() -> None:
         "Python",
         "Distributed Systems",
     ]
-    assert parse_certifications(NormalizedGraph(load("certifications")))[0][
-        "license_number"
-    ] == "SYNTHETIC-42"
-    assert parse_languages(NormalizedGraph(load("languages")))[0]["proficiency"] == "FULL_PROFESSIONAL"
+    assert (
+        parse_certifications(NormalizedGraph(load("certifications")))[0]["license_number"]
+        == "SYNTHETIC-42"
+    )
+    assert (
+        parse_languages(NormalizedGraph(load("languages")))[0]["proficiency"] == "FULL_PROFESSIONAL"
+    )
 
 
 def test_core_parses_legacy_core_fixture() -> None:

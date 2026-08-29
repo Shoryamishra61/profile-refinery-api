@@ -17,6 +17,7 @@ members or unrelated surfaces (LinkedIn interning is additive). Therefore:
 
 This module is a pure transformation: no I/O, deterministic order.
 """
+
 from __future__ import annotations
 
 import urllib.parse
@@ -131,9 +132,7 @@ class NormalizedGraph:
                         return urn
             for entity in candidates:
                 urn_value = entity.get("entityUrn")
-                if isinstance(urn_value, str) and wanted in urllib.parse.unquote(
-                    urn_value
-                ).lower():
+                if isinstance(urn_value, str) and wanted in urllib.parse.unquote(urn_value).lower():
                     return urn_value
         raise AmbiguousTargetProfile(
             f"root graph references {len(candidates)} Profile entities; "
@@ -161,11 +160,7 @@ class NormalizedGraph:
             if isinstance(ref_or_object, str)
             else str(ref_or_object.get("entityUrn") or "")
         )
-        root = (
-            self._by_urn.get(root_urn)
-            if isinstance(ref_or_object, str)
-            else ref_or_object
-        )
+        root = self._by_urn.get(root_urn) if isinstance(ref_or_object, str) else ref_or_object
         if not isinstance(root, dict):
             return []
         owned: dict[str, dict[str, Any]] = {}

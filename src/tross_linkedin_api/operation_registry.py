@@ -103,7 +103,9 @@ class OperationRegistry:
         except KeyError as exc:
             raise KeyError(f"unregistered operation: {semantic_name}") from exc
         if semantic_name not in self._active_names:
-            raise ValueError(f"operation is unavailable in the active evidence mode: {semantic_name}")
+            raise ValueError(
+                f"operation is unavailable in the active evidence mode: {semantic_name}"
+            )
         return operation
 
     def enabled_names(self) -> list[str]:

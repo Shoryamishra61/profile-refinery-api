@@ -23,6 +23,7 @@ Patterns and the workload characteristics that justify them:
   count, exponential backoff and jitter. Deterministic failures
   (unavailable profile, drift, expired auth) are never retried.
 """
+
 from __future__ import annotations
 
 import asyncio

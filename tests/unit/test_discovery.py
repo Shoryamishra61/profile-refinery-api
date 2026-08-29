@@ -35,7 +35,9 @@ def test_ignores_non_profile_linkedin_urls() -> None:
 
 
 def test_invalid_slug_never_becomes_a_profile() -> None:
-    found = discover_in_text("see linkedin.com/in/../../admin and linkedin.com/in/ok-person", "pasted_text")
+    found = discover_in_text(
+        "see linkedin.com/in/../../admin and linkedin.com/in/ok-person", "pasted_text"
+    )
     assert [url for url, _ in found] == ["https://www.linkedin.com/in/ok-person"]
 
 

@@ -227,7 +227,9 @@ async def test_authwall_redirect_is_session_expired(monkeypatch) -> None:
 async def test_same_url_redirect_is_challenge_session_survives(monkeypatch) -> None:
     _, _, session, transport = live_components(monkeypatch)
     route = respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
-        return_value=Response(302, headers={"location": f"https://www.linkedin.com{DASH_PATH}?q=memberIdentity"})
+        return_value=Response(
+            302, headers={"location": f"https://www.linkedin.com{DASH_PATH}?q=memberIdentity"}
+        )
     )
     with pytest.raises(UpstreamChallenge):
         await transport.execute("profile_view", "some-person", "req-1")

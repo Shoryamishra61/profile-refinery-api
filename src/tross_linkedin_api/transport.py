@@ -159,7 +159,9 @@ class LinkedInTransport:
                 for pair in extra.get_secret_value().split(";"):
                     name, _, value = pair.strip().partition("=")
                     if name and value and name not in ("li_at", "JSESSIONID"):
-                        self._client.cookies.set(name.strip(), value.strip(), domain=".linkedin.com")
+                        self._client.cookies.set(
+                            name.strip(), value.strip(), domain=".linkedin.com"
+                        )
         self.call_count = 0
 
     def _csrf_token(self) -> str:
@@ -216,9 +218,7 @@ class LinkedInTransport:
         """
         started = time.perf_counter()
         path = (
-            operation.path.replace("{resource_id}", resource_id)
-            if resource_id
-            else operation.path
+            operation.path.replace("{resource_id}", resource_id) if resource_id else operation.path
         )
         sub_resource = resource_id is not None and "{resource_id}" in operation.path
         url = f"{UPSTREAM_ORIGIN}{path}"

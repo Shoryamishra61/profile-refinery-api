@@ -52,7 +52,7 @@ asyncio_mode = "auto"
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-extend-exclude = ["11_ARCHIVE_ORIGINALS", "scripts/session_capture_watch.py", "scripts/acceptance_run.py"]
+extend-exclude = ["11_ARCHIVE_ORIGINALS", "scripts/session_capture_watch.py", "scripts/acceptance_run.py", "scripts/quiet_recovery_validation.py", "scripts/production_differential.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]

@@ -4,6 +4,7 @@ Requests three unrelated real profiles plus an A-repeat, validates the public
 contract, profile-specific differences, and absence of fixture sentinels.
 Paced: one request at a time with gaps, respecting upstream safety.
 """
+
 import asyncio
 import json
 import os

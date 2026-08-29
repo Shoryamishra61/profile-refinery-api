@@ -230,9 +230,7 @@ class BatchService:
                         }
                         for item in job.history
                     ],
-                    "response": (
-                        job.response.model_dump(mode="json") if job.response else None
-                    ),
+                    "response": (job.response.model_dump(mode="json") if job.response else None),
                 }
                 for job in batch.jobs
             ],
@@ -387,8 +385,7 @@ class BatchService:
         resumable = [
             job
             for job in batch.jobs
-            if job.state
-            in {JobState.PENDING, JobState.RETRY_WAIT, JobState.BLOCKED_UPSTREAM}
+            if job.state in {JobState.PENDING, JobState.RETRY_WAIT, JobState.BLOCKED_UPSTREAM}
         ]
         if resumable:
             semaphore = asyncio.Semaphore(self._runtime.settings.app_batch_concurrency)
@@ -424,7 +421,9 @@ class BatchService:
         self._persist(batch)
         return batch
 
-    async def _share(self, inflight: asyncio.Task[ProfileResponse], job: ProfileJob, batch: Batch) -> None:
+    async def _share(
+        self, inflight: asyncio.Task[ProfileResponse], job: ProfileJob, batch: Batch
+    ) -> None:
         try:
             response = await inflight
         except Exception:  # noqa: BLE001 - the primary owner records the failure

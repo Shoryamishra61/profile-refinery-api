@@ -15,6 +15,7 @@ Text normalization handles the observed shapes:
 Unknown complex objects yield ``None`` plus a warning at the orchestrator
 layer — never ``str(dict)`` in user-visible content.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -162,9 +163,7 @@ def parse_core(graph: NormalizedGraph) -> dict[str, Any]:
     last = _localized(profile.get("lastName"))
     full = " ".join(part for part in (first, last) if part) or _localized(profile.get("fullName"))
     member_urn = profile.get("entityUrn")
-    location = _localized(profile.get("locationName")) or _localized(
-        profile.get("geoLocationName")
-    )
+    location = _localized(profile.get("locationName")) or _localized(profile.get("geoLocationName"))
     return {
         "identity": {
             "member_urn": member_urn if isinstance(member_urn, str) else None,
@@ -258,9 +257,7 @@ def parse_languages(graph: NormalizedGraph) -> list[dict[str, Any]]:
         name = _localized(item.get("name"))
         if not name:
             continue
-        output.append(
-            {"id": urn, "name": name, "proficiency": _localized(item.get("proficiency"))}
-        )
+        output.append({"id": urn, "name": name, "proficiency": _localized(item.get("proficiency"))})
     return output
 
 

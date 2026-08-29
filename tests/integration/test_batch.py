@@ -25,9 +25,7 @@ def auth(client: httpx.AsyncClient) -> dict[str, str]:
 
 
 async def _create_batch(client: httpx.AsyncClient, text: str) -> dict[str, object]:
-    response = await client.post(
-        "/v1/batches", params={"text": text}, headers=auth(client)
-    )
+    response = await client.post("/v1/batches", params={"text": text}, headers=auth(client))
     assert response.status_code == 202, response.text
     return response.json()
 
@@ -53,9 +51,7 @@ async def test_batch_dedupes_and_processes_with_provenance(client: httpx.AsyncCl
     assert body["status"] == "SUCCEEDED"
     assert body["statistics"]["succeeded"] == 2
 
-    profiles = await client.get(
-        f"/v1/batches/{summary['batch_id']}/profiles", headers=auth(client)
-    )
+    profiles = await client.get(f"/v1/batches/{summary['batch_id']}/profiles", headers=auth(client))
     jobs = profiles.json()["profiles"]
     assert all(job["state"] == "SUCCEEDED" for job in jobs)
     first = jobs[0]
@@ -67,9 +63,7 @@ async def test_batch_dedupes_and_processes_with_provenance(client: httpx.AsyncCl
 async def test_batch_partial_failure_preserves_successes(
     client: httpx.AsyncClient, stub_transport: StubTransport
 ) -> None:
-    stub_transport.set_for_slug(
-        "profile_view", "missing-person", [ProfileNotFound()]
-    )
+    stub_transport.set_for_slug("profile_view", "missing-person", [ProfileNotFound()])
     summary = await _create_batch(
         client,
         "https://www.linkedin.com/in/missing-person/\n"
@@ -84,7 +78,11 @@ async def test_batch_partial_failure_preserves_successes(
     assert body["statistics"]["failed"] == 1
 
     profiles = (
-        await client.get(f"/v1/batches/{summary['batch_id']}/profiles", params={"include_responses": True}, headers=auth(client))
+        await client.get(
+            f"/v1/batches/{summary['batch_id']}/profiles",
+            params={"include_responses": True},
+            headers=auth(client),
+        )
     ).json()
     failed = [job for job in profiles["profiles"] if job["state"] == "FAILED"]
     succeeded = [job for job in profiles["profiles"] if job["state"] == "SUCCEEDED"]
@@ -196,10 +194,23 @@ def _docx_with_urls() -> bytes:
 @pytest.mark.asyncio
 async def test_batch_file_ingestion_csv_xlsx_docx_txt(client: httpx.AsyncClient) -> None:
     files = [
-        ("files", ("people.csv", b"name,url\nAnn,https://www.linkedin.com/in/csv-person/", "text/csv")),
+        (
+            "files",
+            ("people.csv", b"name,url\nAnn,https://www.linkedin.com/in/csv-person/", "text/csv"),
+        ),
         ("files", ("people.xlsx", _xlsx_with_urls(), "application/octet-stream")),
-        ("files", ("cv.docx", _docx_with_urls(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
-        ("files", ("notes.txt", b"txt person https://www.linkedin.com/in/txt-person/", "text/plain")),
+        (
+            "files",
+            (
+                "cv.docx",
+                _docx_with_urls(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ),
+        ),
+        (
+            "files",
+            ("notes.txt", b"txt person https://www.linkedin.com/in/txt-person/", "text/plain"),
+        ),
     ]
     response = await client.post("/v1/batches", files=files, headers=auth(client))
     assert response.status_code == 202, response.text

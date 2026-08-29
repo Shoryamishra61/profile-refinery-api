@@ -7,11 +7,11 @@ probe may have kept resetting it). Protocol:
   3. if complete, run the paced 30-profile acceptance
   4. otherwise: another quiet period (longer), up to MAX_CYCLES
 """
+
 import asyncio
 import os
 import subprocess
 import sys
-import time
 
 LI_AT = os.environ["TROSS_LI_AT"]
 JSESSIONID = os.environ["TROSS_JSESSIONID"]
@@ -25,8 +25,8 @@ ENV = {
     "APP_API_KEYS": KEY,
     "APP_MODE": "live",
     "APP_STORE_DIR": "./.tross_store_local",
-    "TROSS_API_KEY": KEY,   # consumed by production_differential / acceptance_run
-    "TROSS_BASE": BASE,     # validate against the local governed instance, not production
+    "TROSS_API_KEY": KEY,  # consumed by production_differential / acceptance_run
+    "TROSS_BASE": BASE,  # validate against the local governed instance, not production
 }
 QUIET_MINUTES = int(os.environ.get("QUIET_MINUTES", "60"))
 MAX_CYCLES = int(os.environ.get("MAX_CYCLES", "3"))
@@ -44,19 +44,33 @@ async def main() -> None:
         await asyncio.sleep(quiet)
         print(f"=== cycle {cycle}: starting governed instance", flush=True)
         server = await asyncio.create_subprocess_exec(
-            PY, "-m", "uvicorn", "tross_linkedin_api.main:app",
-            "--port", "8907", "--log-level", "warning", env=ENV,
+            PY,
+            "-m",
+            "uvicorn",
+            "tross_linkedin_api.main:app",
+            "--port",
+            "8907",
+            "--log-level",
+            "warning",
+            env=ENV,
         )
         try:
             await asyncio.sleep(8)
-            code, out = run(
-                [PY, "scripts/production_differential.py"], timeout=600
-            )
+            code, out = run([PY, "scripts/production_differential.py"], timeout=600)
             print(out[-1500:], flush=True)
             if code == 0:
                 print("DIFFERENTIAL PASSED - running acceptance", flush=True)
-                code, out = run([PY, "scripts/acceptance_run.py", "--base", BASE,
-                                 "--out", "C:/tmp/acceptance_result.json"], timeout=3600)
+                code, out = run(
+                    [
+                        PY,
+                        "scripts/acceptance_run.py",
+                        "--base",
+                        BASE,
+                        "--out",
+                        "C:/tmp/acceptance_result.json",
+                    ],
+                    timeout=3600,
+                )
                 print(out[-2500:], flush=True)
                 print(f"ACCEPTANCE rc={code}", flush=True)
                 sys.exit(0 if code == 0 else 1)

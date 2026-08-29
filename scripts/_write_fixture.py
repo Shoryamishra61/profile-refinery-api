@@ -1,4 +1,5 @@
 """Rewrite the integration fixture into the live-observed dash collection shape."""
+
 import json
 from pathlib import Path
 

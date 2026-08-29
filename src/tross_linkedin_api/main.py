@@ -39,9 +39,7 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
 
     @application.middleware("http")
     async def assign_request_id(request: Request, call_next: Any) -> Any:
-        request.state.tross_request_id = (
-            request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        )
+        request.state.tross_request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         return await call_next(request)
 
     @application.exception_handler(ProblemError)

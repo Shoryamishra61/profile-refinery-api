@@ -3,6 +3,7 @@
 The invariant: ownership comes from references rooted in the response's data
 graph — never from globally collecting entities whose $type happens to match.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -40,7 +41,10 @@ def adversarial_payload() -> dict:
     from the root/target graph.
     """
     return {
-        "data": {"*elements": [TARGET_PROFILE_URN], "$type": "com.linkedin.restli.common.CollectionResponse"},
+        "data": {
+            "*elements": [TARGET_PROFILE_URN],
+            "$type": "com.linkedin.restli.common.CollectionResponse",
+        },
         "included": [
             {
                 "$type": "com.linkedin.voyager.dash.identity.profile.Profile",
@@ -96,9 +100,7 @@ def test_foreign_position_never_becomes_target_experience() -> None:
     graph = NormalizedGraph(adversarial_payload(), slug="target-person")
     profile = graph.target_profile()
     reachable = graph.collection_elements(profile)
-    positions = [
-        e for e in reachable if e["$type"].endswith(".Position")
-    ]
+    positions = [e for e in reachable if e["$type"].endswith(".Position")]
     urns = {e["entityUrn"] for e in positions}
     assert urns == {POSITION_1_URN, POSITION_2_URN}
     assert FOREIGN_POSITION_URN not in urns

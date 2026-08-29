@@ -7,6 +7,7 @@ losing them. On Vercel the store directory lives on the instance's
 ephemeral disk — see docs/adr-0005-deployment-runtime.md for the honest
 tradeoff and the upgrade path.
 """
+
 from __future__ import annotations
 
 import json

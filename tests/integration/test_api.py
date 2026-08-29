@@ -44,8 +44,7 @@ async def test_live_profile_contract_and_provenance(client: httpx.AsyncClient) -
     assert retrieval["fixture"] is False
     assert retrieval["source"] == "linkedin"
     assert (
-        retrieval["requested_url"]
-        == "https://linkedin.com/in/test-integration-profile?trk=example"
+        retrieval["requested_url"] == "https://linkedin.com/in/test-integration-profile?trk=example"
     )
     profile = body["profile"]
     assert profile["first_name"]["value"] == "Integration"

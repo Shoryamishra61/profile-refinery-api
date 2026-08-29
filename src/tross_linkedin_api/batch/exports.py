@@ -115,13 +115,33 @@ def xlsx_bytes(
 
     write("profiles", FLAT_COLUMNS, rows)
     section_columns = {
-        "experience": ["linkedin_url", "title", "company_name", "company_url",
-                        "location", "start_date", "end_date", "is_current"],
-        "education": ["linkedin_url", "school_name", "degree_name", "field_of_study",
-                       "start_date", "end_date"],
+        "experience": [
+            "linkedin_url",
+            "title",
+            "company_name",
+            "company_url",
+            "location",
+            "start_date",
+            "end_date",
+            "is_current",
+        ],
+        "education": [
+            "linkedin_url",
+            "school_name",
+            "degree_name",
+            "field_of_study",
+            "start_date",
+            "end_date",
+        ],
         "skills": ["linkedin_url", "name"],
-        "certifications": ["linkedin_url", "name", "authority", "license_number",
-                            "start_date", "end_date"],
+        "certifications": [
+            "linkedin_url",
+            "name",
+            "authority",
+            "license_number",
+            "start_date",
+            "end_date",
+        ],
         "languages": ["linkedin_url", "name", "proficiency"],
     }
     for sheet_name, columns in section_columns.items():
@@ -133,7 +153,16 @@ def xlsx_bytes(
         write(sheet_name, columns, records)
     write(
         "provenance",
-        ["linkedin_url", "source_type", "source_name", "sheet", "row", "column", "offset", "original_text"],
+        [
+            "linkedin_url",
+            "source_type",
+            "source_name",
+            "sheet",
+            "row",
+            "column",
+            "offset",
+            "original_text",
+        ],
         [
             {"linkedin_url": url, **occurrence}
             for url, occurrences in provenance_by_url.items()
@@ -166,7 +195,7 @@ def report_hash(report: dict[str, Any], generator_version: str) -> str:
 
 
 def field_value(profile: dict[str, Any], name: str) -> Any:
-    entry = (profile.get(name) or {})
+    entry = profile.get(name) or {}
     if isinstance(entry, dict):
         return entry.get("value")
     return None
@@ -205,7 +234,9 @@ def profile_report(response: dict[str, Any]) -> dict[str, Any]:
             for item in field_value(profile, "education") or []
         ],
         "skills": [item.get("name") for item in field_value(profile, "skills") or []],
-        "certifications": [item.get("name") for item in field_value(profile, "certifications") or []],
+        "certifications": [
+            item.get("name") for item in field_value(profile, "certifications") or []
+        ],
         "languages": [item.get("name") for item in field_value(profile, "languages") or []],
         "location": field_value(profile, "location"),
         "retrieved_at": response.get("observed_at"),
