@@ -36,16 +36,17 @@ class Runtime:
         self.orchestrator = ProfileOrchestrator(
             self.registry, self.transport, self.validator, self.governor
         )
+        self._live_extraction_confirmed = False
+        self._live_failure_code: str | None = None
 
     @property
     def ready(self) -> bool:
-        # Readiness means: the primary live operation is enabled AND a LinkedIn
-        # session is actually configured. Runtime upstream health (challenges,
-        # breaker state) is a separate capability dimension, not readiness.
         return (
             "profile_view" in self.registry.enabled_names()
             and self.settings.app_mode is AppMode.LIVE
             and self.session.available
+            and self._live_extraction_confirmed
+            and self._live_failure_code is None
         )
 
     def extraction_capability(self) -> dict[str, object]:
@@ -53,6 +54,9 @@ class Runtime:
         if not self.session.available:
             state = "UNAVAILABLE"
             detail = "No LinkedIn session configured."
+        elif self._live_failure_code is not None:
+            state = "UNUSABLE"
+            detail = f"The latest live profile extraction failed: {self._live_failure_code}."
         else:
             breaker = self.governor.breaker
             state = breaker.state.value
@@ -60,6 +64,9 @@ class Runtime:
                 detail = "Circuit open after challenge/failures; cooldown in progress."
             elif state == "HALF_OPEN":
                 detail = "Controlled probe in progress after cooldown."
+            elif not self._live_extraction_confirmed:
+                state = "UNVERIFIED"
+                detail = "No successful live profile extraction has been observed in this process."
             else:
                 detail = "Extraction available under rate budget."
         return {
@@ -67,6 +74,14 @@ class Runtime:
             "detail": detail,
             "governor": self.governor.observe(),
         }
+
+    def mark_live_success(self) -> None:
+        self._live_extraction_confirmed = True
+        self._live_failure_code = None
+
+    def mark_live_failure(self, code: str) -> None:
+        self._live_extraction_confirmed = False
+        self._live_failure_code = code
 
     def ensure_profile_available(self) -> None:
         if "profile_view" not in self.registry.enabled_names():

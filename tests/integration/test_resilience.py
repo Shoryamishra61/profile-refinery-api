@@ -330,7 +330,9 @@ async def test_challenge_breaker_recovery_keeps_session_configured(tmp_path: Any
         )
         assert final.json()["statistics"]["succeeded"] == 2
         assert runtime.governor.breaker.state.value == "CLOSED"
-        assert runtime.extraction_capability()["state"] == "CLOSED"
+        # Batch recovery closes the transport breaker, but readiness stays
+        # conservative until the decisive single-profile API succeeds.
+        assert runtime.extraction_capability()["state"] == "UNVERIFIED"
     await runtime.aclose()
 
 

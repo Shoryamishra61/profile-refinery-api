@@ -38,6 +38,7 @@ from .errors import (
     UpstreamChallenge,
     UpstreamRateLimited,
     UpstreamTimeout,
+    UpstreamUnavailable,
 )
 
 T = TypeVar("T")
@@ -172,7 +173,7 @@ class CircuitBreaker:
         }
 
 
-RETRYABLE_ERRORS = (UpstreamTimeout, UpstreamRateLimited)
+RETRYABLE_ERRORS = (UpstreamTimeout, UpstreamRateLimited, UpstreamUnavailable)
 BREAKER_ERRORS = (UpstreamChallenge,)
 
 

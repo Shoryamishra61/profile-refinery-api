@@ -10,10 +10,10 @@ from tross_linkedin_api.errors import ProfileNotFound, UpstreamOperationDrift, U
 async def test_healthz_is_public_and_readyz_reflects_session(client: httpx.AsyncClient) -> None:
     assert (await client.get("/healthz")).json() == {"status": "ok"}
     response = await client.get("/readyz")
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
-    assert body["status"] == "ready"
-    assert body["extraction_capability"]["state"] == "CLOSED"
+    assert body["status"] == "not_ready"
+    assert body["extraction_capability"]["state"] == "UNVERIFIED"
     assert "governor" in body["extraction_capability"]
 
 
@@ -73,6 +73,9 @@ async def test_live_profile_contract_and_provenance(client: httpx.AsyncClient) -
     assert body["partial"] is False
     assert body["meta"]["transport_strategy"] == "profile_view"
     assert body["meta"]["viewer_context"] == "authenticated_backend_member"
+    readiness = await client.get("/readyz")
+    assert readiness.status_code == 200
+    assert readiness.json()["extraction_capability"]["state"] == "CLOSED"
 
 
 @pytest.mark.asyncio
@@ -109,6 +112,9 @@ async def test_upstream_failure_is_explicit_never_fixture(
     body = response.json()
     assert body["code"] == "UPSTREAM_TIMEOUT"
     assert "SYNTHETIC" not in response.text
+    readiness = await client.get("/readyz")
+    assert readiness.status_code == 503
+    assert readiness.json()["extraction_capability"]["state"] == "UNUSABLE"
 
 
 @pytest.mark.asyncio

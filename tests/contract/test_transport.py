@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import parse_qs
 
 import httpx
 import pytest
@@ -13,9 +14,11 @@ from tross_linkedin_api.errors import (
     ProfileNotFound,
     UpstreamAuthExpired,
     UpstreamChallenge,
+    UpstreamForbidden,
     UpstreamOperationDrift,
     UpstreamRateLimited,
     UpstreamTimeout,
+    UpstreamUnavailable,
 )
 from tross_linkedin_api.operation_registry import OperationRegistry, RegistryDocument
 from tross_linkedin_api.session import SessionProvider
@@ -171,6 +174,7 @@ async def test_rsc_request_uses_minimal_semantic_contract_without_telemetry(monk
     assert request.headers["csrf-token"] == "ajax:test-session"
     assert request.headers["x-li-anchor-page-key"] == "d_flagship3_profile_view_base"
     assert request.headers["x-li-rsc-stream"] == "true"
+    assert request.headers["accept-language"] == "en-US,en;q=0.9,hi;q=0.8,en-IN;q=0.7"
     assert "x-li-page-instance" not in request.headers
     assert "x-li-traceparent" not in request.headers
     body = json.loads(request.content)
@@ -178,6 +182,73 @@ async def test_rsc_request_uses_minimal_semantic_contract_without_telemetry(monk
     assert payload["vanityName"] == "some-person"
     assert payload["replaceableSectionArgs"]["vieweeProfileId"] == "ACoSANITIZED"
     assert result.payload["flight"].startswith("0:")
+
+
+@respx.mock
+async def test_profile_view_matches_known_good_stable_rsc_contract(monkeypatch) -> None:
+    settings, _, session, _ = live_components(monkeypatch)
+    registry = OperationRegistry(
+        RegistryDocument.model_validate(
+            {
+                "version": 2,
+                "operations": [
+                    {
+                        "semantic_name": "profile_view",
+                        "enabled": True,
+                        "evidence_status": "live_verified",
+                        "kind": "rsc",
+                        "method": "POST",
+                        "path": RSC_PATH,
+                        "transport_family": "react_flight",
+                        "parser": "linkedin_sdui_flight_v1",
+                        "component_id": (
+                            "com.linkedin.sdui.generated.profile.dsl.impl."
+                            "profileCardsActivity"
+                        ),
+                        "request_variant": "profile_activity",
+                        "observed_at": "2026-08-29T00:00:00Z",
+                        "evidence_reference": "known-good-har",
+                    }
+                ],
+            }
+        )
+    )
+    transport = LinkedInTransport(settings, registry, session)
+    route = respx.post(f"https://www.linkedin.com{RSC_PATH}").mock(
+        return_value=Response(
+            200,
+            content=b'0:{"children":["captured"]}\n',
+            headers={"content-type": "application/octet-stream"},
+        )
+    )
+
+    await transport.execute("profile_view", "some-person", "req-profile-view")
+    await transport.aclose()
+
+    request = route.calls.last.request
+    assert request.method == "POST"
+    assert request.url.host == "www.linkedin.com"
+    assert request.url.path == RSC_PATH
+    assert set(parse_qs(request.url.query.decode())) == {"componentId", "sduiid"}
+    component = "com.linkedin.sdui.generated.profile.dsl.impl.profileCardsActivity"
+    assert request.url.params["componentId"] == component
+    assert request.url.params["sduiid"] == component
+    assert request.headers["content-type"] == "application/json"
+    assert request.headers["accept"] == "*/*"
+    assert request.headers["accept-language"] == "en-US,en;q=0.9,hi;q=0.8,en-IN;q=0.7"
+    assert request.headers["csrf-token"] == "ajax:test-session"
+    assert request.headers["x-li-anchor-page-key"] == "d_flagship3_profile_view_base"
+    assert request.headers["x-li-rsc-stream"] == "true"
+    assert not {"x-li-page-instance", "x-li-traceparent"} & set(request.headers)
+    assert json.loads(request.content) == {
+        "clientArguments": {
+            "payload": {"isSelfView": False, "vanityName": "some-person"},
+            "states": [],
+            "requestMetadata": {"$type": "proto.sdui.common.RequestMetadata"},
+            "screenId": "com.linkedin.sdui.flagshipnav.home.Home",
+            "knownTemplateIds": [],
+        }
+    }
 
 
 @respx.mock
@@ -238,10 +309,20 @@ async def test_401_fails_session_closed(monkeypatch) -> None:
 
 
 @respx.mock
-async def test_403_becomes_challenge(monkeypatch) -> None:
-    _, _, _, transport = live_components(monkeypatch)
+async def test_403_becomes_forbidden_without_invalidating_session(monkeypatch) -> None:
+    _, _, session, transport = live_components(monkeypatch)
     respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(return_value=Response(403))
-    with pytest.raises(UpstreamChallenge):
+    with pytest.raises(UpstreamForbidden):
+        await transport.execute("profile_view", "some-person", "req-1")
+    assert session.available is True
+    await transport.aclose()
+
+
+@respx.mock
+async def test_5xx_becomes_upstream_unavailable(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(return_value=Response(503))
+    with pytest.raises(UpstreamUnavailable):
         await transport.execute("profile_view", "some-person", "req-1")
     await transport.aclose()
 

@@ -45,7 +45,7 @@ def test_live_mode_without_session_fails_closed() -> None:
     assert "SYNTHETIC-001" not in response.text
 
 
-def test_readiness_turns_green_with_configured_session() -> None:
+def test_readiness_requires_observed_live_success() -> None:
     settings = Settings(
         app_api_keys=["live-test-key"],
         app_mode="live",
@@ -55,6 +55,9 @@ def test_readiness_turns_green_with_configured_session() -> None:
         linkedin_jsessionid='"ajax:configured"',
     )
     runtime = Runtime(settings, transport=StubTransport())
+    assert runtime.ready is False
+    assert runtime.extraction_capability()["state"] == "UNVERIFIED"
+    runtime.mark_live_success()
     assert runtime.ready is True
 
 

@@ -113,6 +113,27 @@ class UpstreamChallenge(UpstreamFailure):
         )
 
 
+class UpstreamForbidden(UpstreamFailure):
+    def __init__(self) -> None:
+        super().__init__(
+            503,
+            "UPSTREAM_FORBIDDEN",
+            "Upstream request forbidden",
+            "LinkedIn refused the authenticated request with HTTP 403.",
+        )
+
+
+class UpstreamUnavailable(UpstreamFailure):
+    def __init__(self, operation: str) -> None:
+        super().__init__(
+            503,
+            "UPSTREAM_UNAVAILABLE",
+            "Upstream service unavailable",
+            "LinkedIn returned a server-side failure.",
+            {"operation": operation},
+        )
+
+
 class UpstreamRateLimited(UpstreamFailure):
     def __init__(self) -> None:
         super().__init__(

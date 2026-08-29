@@ -13,9 +13,11 @@ from .errors import (
     ProfileNotFound,
     UpstreamAuthExpired,
     UpstreamChallenge,
+    UpstreamForbidden,
     UpstreamOperationDrift,
     UpstreamRateLimited,
     UpstreamTimeout,
+    UpstreamUnavailable,
 )
 from .models import OperationResult
 from .observability import OperationEvent, log_operation
@@ -265,7 +267,7 @@ class LinkedInTransport:
                     self._session.fail_closed()
                     raise UpstreamAuthExpired()
                 if response.status_code == 403:
-                    raise UpstreamChallenge()
+                    raise UpstreamForbidden()
                 if response.status_code == 404:
                     raise UpstreamOperationDrift(
                         operation.semantic_name, "RSC component operation returned 404."
@@ -273,7 +275,7 @@ class LinkedInTransport:
                 if response.status_code == 429:
                     raise UpstreamRateLimited()
                 if response.status_code >= 500:
-                    raise UpstreamTimeout(operation.semantic_name)
+                    raise UpstreamUnavailable(operation.semantic_name)
                 if response.status_code >= 300:
                     raise UpstreamOperationDrift(
                         operation.semantic_name,
@@ -493,7 +495,7 @@ class LinkedInTransport:
         )
 
     def _classify_page_status(self, response: httpx.Response, operation: str) -> None:
-        # Challenges (999 bot wall, 403, same-URL redirects) are transient:
+        # Challenges (999 bot wall, same-URL redirects) are transient:
         # the circuit breaker owns their recovery. Only authwall redirects and
         # 401s invalidate the session itself.
         if response.is_redirect:
@@ -508,13 +510,13 @@ class LinkedInTransport:
             self._session.fail_closed()
             raise UpstreamAuthExpired()
         if response.status_code == 403:
-            raise UpstreamChallenge()
+            raise UpstreamForbidden()
         if response.status_code == 404:
             raise ProfileNotFound()
         if response.status_code == 429:
             raise UpstreamRateLimited()
         if response.status_code >= 500:
-            raise UpstreamTimeout(operation)
+            raise UpstreamUnavailable(operation)
         if response.status_code >= 300:
             raise UpstreamOperationDrift(
                 operation, f"Unexpected page status class: {response.status_code // 100}xx"
@@ -543,8 +545,7 @@ class LinkedInTransport:
             self._session.fail_closed()
             raise UpstreamAuthExpired()
         if response.status_code == 403:
-            self._session.fail_closed()
-            raise UpstreamChallenge()
+            raise UpstreamForbidden()
         if response.status_code == 404:
             # Only fatal once every decoration has been tried; callers treat this
             # as a candidate-level signal inside _execute_restli.
@@ -554,7 +555,7 @@ class LinkedInTransport:
         if response.status_code in {400, 410, 422}:
             raise UpstreamOperationDrift(operation)
         if response.status_code >= 500:
-            raise httpx.ReadError("transient upstream server failure", request=response.request)
+            raise UpstreamUnavailable(operation)
         if response.status_code >= 300:
             raise UpstreamOperationDrift(
                 operation, f"Unexpected upstream status class: {response.status_code // 100}xx"

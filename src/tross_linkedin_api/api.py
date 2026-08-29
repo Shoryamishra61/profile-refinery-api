@@ -16,6 +16,7 @@ from .errors import (
     InvalidProfileUrl,
     ProblemError,
     UnauthorizedCaller,
+    UpstreamFailure,
 )
 from .metrics import METRICS
 from .models import ProfileResponse
@@ -127,7 +128,12 @@ def build_router(runtime: Runtime) -> APIRouter:
         canonical = canonicalize_profile_url(url)
         runtime.ensure_profile_available()
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        response = await runtime.orchestrator.fetch(canonical, request_id)
+        try:
+            response = await runtime.orchestrator.fetch(canonical, request_id)
+        except UpstreamFailure as exc:
+            runtime.mark_live_failure(exc.code)
+            raise
+        runtime.mark_live_success()
         response.request_id = request_id
         response.status = "partial" if response.partial else "succeeded"
         return response
