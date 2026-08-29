@@ -14,14 +14,16 @@ operations:
     decoration_ids: []
     observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#dash-profiles
-  # Section contracts (governing spec §6). Resource shape:
-  #   /voyager/api/identity/dash/profileCards/{memberId}-{SECTION}-en_US
-  # Evidence status is deliberately "historical": the shapes are implemented
-  # and shape-tested but no live request has verified them yet. Only a real
-  # successful response may promote these to live_verified.
+  # Section contracts (governing spec §6). RETIRED per live evidence:
+  # on 2026-08-29 an authenticated request to this resource answered HTTP 404
+  # (HTML error page) — the profileCards restli resource no longer exists.
+  # The modern profile page loads sections through SDUI rsc-action component
+  # payloads (rendered React-flight), which is out of scope (spec §M: no new
+  # scraping architecture in the final window). Sections are therefore served
+  # with explicit unavailable semantics until a clean contract re-emerges.
   - semantic_name: profile_experience
-    enabled: true
-    evidence_status: historical
+    enabled: false
+    evidence_status: disabled
     kind: restli
     method: GET
     path: /voyager/api/identity/dash/profileCards/{resource_id}
@@ -31,8 +33,8 @@ operations:
     observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
   - semantic_name: profile_education
-    enabled: true
-    evidence_status: historical
+    enabled: false
+    evidence_status: disabled
     kind: restli
     method: GET
     path: /voyager/api/identity/dash/profileCards/{resource_id}
@@ -42,8 +44,8 @@ operations:
     observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
   - semantic_name: profile_skills
-    enabled: true
-    evidence_status: historical
+    enabled: false
+    evidence_status: disabled
     kind: restli
     method: GET
     path: /voyager/api/identity/dash/profileCards/{resource_id}
@@ -53,8 +55,8 @@ operations:
     observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
   - semantic_name: profile_certifications
-    enabled: true
-    evidence_status: historical
+    enabled: false
+    evidence_status: disabled
     kind: restli
     method: GET
     path: /voyager/api/identity/dash/profileCards/{resource_id}
@@ -64,8 +66,8 @@ operations:
     observed_at: 2026-08-29T00:00:00Z
     evidence_reference: docs/REVERSE_ENGINEERING_PROTOCOL.md#profile-cards
   - semantic_name: profile_languages
-    enabled: true
-    evidence_status: historical
+    enabled: false
+    evidence_status: disabled
     kind: restli
     method: GET
     path: /voyager/api/identity/dash/profileCards/{resource_id}
