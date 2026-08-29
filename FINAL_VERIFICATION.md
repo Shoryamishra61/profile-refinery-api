@@ -69,7 +69,7 @@ are not reported as live LinkedIn evidence.
 | dependency audit | **PASS**, no known vulnerabilities; local project package not on PyPI |
 | tracked-secret scan | **PASS**, zero high-confidence patterns |
 | Git-history secret scan | **PASS**, zero high-confidence matching commits |
-| fresh clone | Recorded in final handoff after GitHub push |
+| fresh clone | **PASS** — shallow GitHub clone at `a7578d7`, frozen sync, 138 tests passed on CPython 3.14.4 |
 
 ## Release boundary
 
