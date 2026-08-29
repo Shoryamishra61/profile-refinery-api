@@ -10,8 +10,8 @@ All results below are **actually observed** during the final pass on
 | Production URL | https://tross-linkedin-profile-api.vercel.app |
 | Repository | https://github.com/Shoryamishra61/tross-linkedin-profile-api |
 | Final pass date | 2026-08-28 |
-| Deployed functional commit | `da29968` (Vercel production deploy of this tree) |
-| Repository HEAD at submission | `71df0d7` (docs/CI finalization only; functionally identical to deployed commit) |
+| Deployed functional commit | `330109d` (Vercel production deploy of this tree) |
+| Repository HEAD at submission | `330109d` |
 | Deployment | Vercel project `tross-linkedin-profile-api` (Production) |
 | Stack | Python 3.12, FastAPI, httpx, pydantic v2, deployed on Vercel serverless |
 
@@ -166,3 +166,28 @@ handles this as designed (breaker OPEN ⇒ jobs retained ⇒ automatic cooldown
 probe ⇒ recovery when LinkedIn permits). The automated quiet-recovery
 experiment re-runs the differential and the paced 30-profile acceptance as soon
 as LinkedIn serves the session again; results land in this file.
+
+## Architecture pass addendum (2026-08-29)
+
+| Check | Observed |
+|---|---|
+| Tests | 97 passed (adds 7 resilience proofs + section-flow coverage) |
+| `ruff` / `mypy` strict / security audit | all green |
+| Production `GET /readyz` | 200 with `extraction_capability.state` (control-plane state separated from readiness) |
+| Production `GET /metrics`, `GET /v1/capability` | live: breaker state, queue depth/age, governor counters |
+| Real extraction on challenge | explicit `UPSTREAM_CHALLENGE` 503 with `request_id` — no synthetic fallback (observed live on production) |
+| Challenge semantics | job retained (`BLOCKED_UPSTREAM`), attempt budget preserved, automatic cooldown probe (test-proven) |
+| Bug found & fixed by live validation | error-path Content-Length mismatch crashed uvicorn; regression test added |
+
+### 30-profile acceptance status
+
+The acceptance harness is deployed and staged (`scripts/acceptance_run.py` — 30
+unique real profiles + 2 planted duplicates, paced by the governor, breaker
+aware). LinkedIn currently answers every scripted voyager request from our
+client fingerprint with the soft-challenge 302 (persists through 60-minute
+silence, fresh `JSESSIONID`, full cookie context; see protocol notes observation
+11). The automated quiet-recovery watcher re-runs the differential and the
+acceptance the moment LinkedIn serves the session, and writes measured results
+to `C:/tmp/acceptance_result.json`. A fresh operator login clears the flag
+immediately; no workaround is implemented because every candidate workaround is
+safeguard evasion.
