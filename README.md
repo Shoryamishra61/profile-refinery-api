@@ -231,6 +231,13 @@ Returns one normalized profile. Errors use `application/problem+json`:
 
 Every problem response carries the `X-Request-ID` correlation id.
 
+Error-code mapping to common naming conventions: `UPSTREAM_SESSION_INVALID` ⇒
+`UPSTREAM_AUTH_EXPIRED` (session dead, operator rotation required);
+`UPSTREAM_PROFILE_RESTRICTED` ⇒ surfaced as `UPSTREAM_CHALLENGE`/`PROFILE_NOT_FOUND`
+depending on the upstream signal; `RESPONSE_SHAPE_UNKNOWN` ⇒
+`UPSTREAM_OPERATION_DRIFT`; `SCHEMA_VALIDATION_FAILED` ⇒
+`INTERNAL_CONTRACT_FAILURE` (the service refuses to emit schema-invalid output).
+
 ### Batch endpoints
 
 ```text
