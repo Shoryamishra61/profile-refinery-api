@@ -18,3 +18,4 @@ benchmark-results/*.json
 !benchmark-results/.gitkeep
 
 .vercel
+.tross_store*/
