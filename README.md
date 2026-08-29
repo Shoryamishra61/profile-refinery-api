@@ -22,9 +22,9 @@ Sample response (real data captured 2026-08-29; abridged):
   "profile": {
     "identity": {"value": {"member_urn": "urn:li:fsd_profile:ACoAAA8BYqEBCGLg_vT_ca6mMEqkpp9nVffJ3hc",
                             "public_identifier": "williamhgates"}},
-    "first_name": {"value": "William"},
-    "last_name": {"value": "Henry Gates III"},
-    "headline": {"value": "Co-chair, Gates Foundation..."},
+    "first_name": {"value": "Bill"},
+    "last_name": {"value": "Gates"},
+    "headline": {"value": "Chair, Gates Foundation and Founder, Breakthrough Energy"},
     "about": {"value": "Chair of the Gates Foundation. Founder of Breakthrough Energy..."},
     "profile_image": {"value": {"url": "https://media.licdn.com/dms/image/v2/..."}},
     "experience": {"value": [...]},
