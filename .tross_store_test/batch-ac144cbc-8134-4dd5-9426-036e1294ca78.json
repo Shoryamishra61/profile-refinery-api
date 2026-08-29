@@ -1,1 +1,0 @@
-{"batch_id": "ac144cbc-8134-4dd5-9426-036e1294ca78", "created_at": "2026-08-28T21:51:19.697204+00:00", "idempotency_key": null, "stats": {"url_occurrences_discovered": 0, "duplicates_removed": 0}, "skipped_inputs": [{"source_name": "blob.bin", "reason": "Unsupported binary file format."}], "jobs": []}

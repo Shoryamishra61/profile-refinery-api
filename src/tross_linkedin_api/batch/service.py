@@ -464,6 +464,26 @@ class BatchService:
             )
             METRICS.increment("jobs_blocked_total")
         except ProblemError as exc:
+            if exc.code == "UPSTREAM_CHALLENGE":
+                # A challenge is a capacity event (the breaker just opened):
+                # the job is retained and resumed after recovery, and the
+                # attempt budget is not consumed by upstream refusals.
+                job.state = JobState.BLOCKED_UPSTREAM
+                job.error_code = exc.code
+                job.error_detail = exc.detail
+                job.history.append(
+                    Attempt(
+                        started_at=started.isoformat(),
+                        completed_at=datetime.now(UTC).isoformat(),
+                        outcome="blocked_challenge",
+                        latency_ms=(asyncio.get_running_loop().time() - started_monotonic) * 1000,
+                        breaker_state=self._runtime.governor.breaker.state.value,
+                    )
+                )
+                METRICS.increment("jobs_blocked_total")
+                job.updated_at = datetime.now(UTC)
+                self._persist(batch)
+                return
             job.attempts += 1
             job.error_code = exc.code
             job.error_detail = exc.detail

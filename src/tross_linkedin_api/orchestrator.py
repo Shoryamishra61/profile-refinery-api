@@ -7,6 +7,7 @@ from .canonicalizer import CanonicalProfile
 from .errors import (
     LiveFixtureLeakDetected,
     ProfileNotFound,
+    UpstreamChallenge,
     UpstreamFailure,
     UpstreamOperationUnavailable,
 )
@@ -99,6 +100,11 @@ class ProfileOrchestrator:
             except UpstreamFailure as exc:
                 last_error = exc
                 warnings.append(f"{semantic_name}: {type(exc).__name__}")
+                if isinstance(exc, UpstreamChallenge):
+                    # The challenge is the primary signal: a fallback attempt
+                    # would only be rejected by the freshly-opened breaker and
+                    # mask this code behind UPSTREAM_CIRCUIT_OPEN.
+                    raise
         if result is None:
             if last_error is not None:
                 raise last_error
