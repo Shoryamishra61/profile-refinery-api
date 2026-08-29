@@ -103,7 +103,9 @@ def xlsx_bytes(
     provenance_by_url = provenance_by_url or {}
     failures = failures or []
     workbook = openpyxl.Workbook()
-    workbook.remove(workbook.active)  # drop the default sheet; write() creates all
+    default_sheet = workbook.active
+    if default_sheet is not None:
+        workbook.remove(default_sheet)  # write() creates every sheet explicitly
 
     def write(title: str, columns: list[str], records: list[dict[str, Any]]) -> None:
         sheet = workbook.create_sheet(title)
