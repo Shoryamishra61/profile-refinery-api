@@ -26,6 +26,7 @@ ENV = {
     "APP_MODE": "live",
     "APP_STORE_DIR": "./.tross_store_local",
     "TROSS_API_KEY": KEY,   # consumed by production_differential / acceptance_run
+    "TROSS_BASE": BASE,     # validate against the local governed instance, not production
 }
 QUIET_MINUTES = int(os.environ.get("QUIET_MINUTES", "60"))
 MAX_CYCLES = int(os.environ.get("MAX_CYCLES", "3"))
