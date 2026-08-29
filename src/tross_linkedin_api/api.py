@@ -190,6 +190,15 @@ def build_router(runtime: Runtime) -> APIRouter:
         await batches.advance(batch_id, 0.0)
         return JSONResponse(batches.profile(batch_id, profile_id))
 
+    @router.get("/v1/batches/{batch_id}/report", tags=["batches"])
+    async def get_batch_report(
+        batch_id: str,
+        x_api_key: str | None = Security(API_KEY_HEADER),
+    ) -> JSONResponse:
+        _authorized(x_api_key, runtime)
+        await batches.advance(batch_id, 0.0)
+        return JSONResponse(batches.report(batch_id))
+
     @router.get("/v1/batches/{batch_id}/export", tags=["batches"])
     async def export_batch(
         batch_id: str,

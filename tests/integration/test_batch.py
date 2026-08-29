@@ -275,3 +275,71 @@ async def test_batch_accepts_json_body_and_raw_text_body(client: httpx.AsyncClie
     )
     assert raw.status_code == 202
     assert raw.json()["statistics"]["unique_profiles"] == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_report_endpoint_is_deterministic(client: httpx.AsyncClient) -> None:
+    summary = await _create_batch(client, "https://www.linkedin.com/in/report-person/")
+    await client.get(
+        f"/v1/batches/{summary['batch_id']}", params={"wait_seconds": 10}, headers=auth(client)
+    )
+    first = (
+        await client.get(f"/v1/batches/{summary['batch_id']}/report", headers=auth(client))
+    ).json()
+    second = (
+        await client.get(f"/v1/batches/{summary['batch_id']}/report", headers=auth(client))
+    ).json()
+    assert first["report_hash"] == second["report_hash"]
+    assert len(first["report_hash"]) == 64
+    assert first["report"]["profiles_processed"] == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_xlsx_has_spec_sheets(client: httpx.AsyncClient) -> None:
+    summary = await _create_batch(client, "https://www.linkedin.com/in/sheet-person/")
+    await client.get(
+        f"/v1/batches/{summary['batch_id']}", params={"wait_seconds": 10}, headers=auth(client)
+    )
+    xlsx_response = await client.get(
+        f"/v1/batches/{summary['batch_id']}/export",
+        params={"format": "xlsx"},
+        headers=auth(client),
+    )
+    workbook = openpyxl.load_workbook(io.BytesIO(xlsx_response.content))
+    assert workbook.sheetnames == [
+        "profiles",
+        "experience",
+        "education",
+        "skills",
+        "certifications",
+        "languages",
+        "provenance",
+        "failures",
+    ]
+    # determinism: same stored input => byte-stable workbook structure
+    again = await client.get(
+        f"/v1/batches/{summary['batch_id']}/export",
+        params={"format": "xlsx"},
+        headers=auth(client),
+    )
+    assert openpyxl.load_workbook(io.BytesIO(again.content)).sheetnames == workbook.sheetnames
+
+
+@pytest.mark.asyncio
+async def test_failed_job_appears_in_xlsx_failures_sheet(
+    client: httpx.AsyncClient, stub_transport: StubTransport
+) -> None:
+    stub_transport.set_for_slug("profile_view", "doomed-person", [ProfileNotFound()])
+    summary = await _create_batch(client, "https://www.linkedin.com/in/doomed-person/")
+    await client.get(
+        f"/v1/batches/{summary['batch_id']}", params={"wait_seconds": 10}, headers=auth(client)
+    )
+    xlsx_response = await client.get(
+        f"/v1/batches/{summary['batch_id']}/export",
+        params={"format": "xlsx"},
+        headers=auth(client),
+    )
+    workbook = openpyxl.load_workbook(io.BytesIO(xlsx_response.content))
+    failures = workbook["failures"]
+    rows = list(failures.iter_rows(min_row=2, values_only=True))
+    assert any(row[2] == "PROFILE_NOT_FOUND" for row in rows)

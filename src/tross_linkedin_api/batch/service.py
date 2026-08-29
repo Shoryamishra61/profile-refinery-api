@@ -570,16 +570,33 @@ class BatchService:
             raise BatchNotFoundError()
         return exports.aggregate(batch)
 
+    def _export_rows(self, batch: Batch) -> list[dict[str, Any]]:
+        rows = []
+        for job in batch.jobs:
+            response = job.response.model_dump(mode="json") if job.response else None
+            rows.append(exports.flatten(response, job.state.value, job.error_code))
+        return rows
+
+    def report(self, batch_id: str) -> dict[str, Any]:
+        """Deterministic grounded report with a stable content hash (spec §10.9)."""
+        batch = self._batches.get(batch_id)
+        if batch is None:
+            raise BatchNotFoundError()
+        report = exports.aggregate(batch)
+        return {
+            "batch_id": batch.batch_id,
+            "report": report,
+            "report_hash": exports.report_hash(report, PARSER_VERSION),
+            "generator_version": PARSER_VERSION,
+        }
+
     def export(self, batch_id: str, export_format: str) -> Any:
         from fastapi.responses import JSONResponse, Response
 
         batch = self._batches.get(batch_id)
         if batch is None:
             raise BatchNotFoundError()
-        rows = []
-        for job in batch.jobs:
-            response = job.response.model_dump(mode="json") if job.response else None
-            rows.append(exports.flatten(response, job.state.value, job.error_code))
+        rows = self._export_rows(batch)
         if export_format == "json":
             payload = json.loads(exports.json_document(batch.summary(), rows).decode("utf-8"))
             return JSONResponse(
@@ -592,8 +609,30 @@ class BatchService:
                 media_type="text/csv",
                 headers={"Content-Disposition": f'attachment; filename="{batch_id}.csv"'},
             )
+        sections_by_url: dict[str, dict[str, list[dict[str, Any]]]] = {}
+        provenance_by_url: dict[str, list[dict[str, Any]]] = {}
+        failures: list[dict[str, Any]] = []
+        for job in batch.jobs:
+            url = job.canonical.canonical_url
+            if job.response is not None:
+                dump = job.response.model_dump(mode="json")
+                profile = dump.get("profile", {})
+                sections_by_url[url] = {
+                    name: exports.field_value(profile, name) or []
+                    for name in ("experience", "education", "skills", "certifications", "languages")
+                }
+            provenance_by_url[url] = [o.as_dict() for o in job.occurrences]
+            if job.state is JobState.FAILED:
+                failures.append(
+                    {
+                        "linkedin_url": url,
+                        "status": job.state.value,
+                        "error_code": job.error_code,
+                        "error_detail": job.error_detail,
+                    }
+                )
         return Response(
-            content=exports.xlsx_bytes(rows),
+            content=exports.xlsx_bytes(rows, sections_by_url, provenance_by_url, failures),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f'attachment; filename="{batch_id}.xlsx"'},
         )

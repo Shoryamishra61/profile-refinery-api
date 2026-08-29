@@ -73,17 +73,72 @@ def csv_bytes(rows: list[dict[str, Any]]) -> bytes:
     return buffer.getvalue().encode("utf-8")
 
 
-def xlsx_bytes(rows: list[dict[str, Any]]) -> bytes:
+def _spreadsheet_safe(record: dict[str, Any]) -> dict[str, Any]:
+    """Deterministic scalar rendering for structured values (date dicts)."""
+    safe: dict[str, Any] = {}
+    for key, value in record.items():
+        if isinstance(value, dict):
+            parts = [str(value[k]) for k in ("year", "month", "day") if k in value]
+            safe[key] = "-".join(parts) if parts else json.dumps(value, sort_keys=True)
+        else:
+            safe[key] = value
+    return safe
+
+
+def xlsx_bytes(
+    rows: list[dict[str, Any]],
+    sections_by_url: dict[str, dict[str, list[dict[str, Any]]]] | None = None,
+    provenance_by_url: dict[str, list[dict[str, Any]]] | None = None,
+    failures: list[dict[str, Any]] | None = None,
+) -> bytes:
+    """Multi-sheet workbook (governing spec §10.8).
+
+    Sheets: profiles / experience / education / skills / certifications /
+    languages / provenance / failures. Structure is deterministic: fixed
+    sheet order, fixed columns, stored rows only (never a LinkedIn fetch).
+    """
     import openpyxl
 
+    sections_by_url = sections_by_url or {}
+    provenance_by_url = provenance_by_url or {}
+    failures = failures or []
     workbook = openpyxl.Workbook()
-    sheet = workbook.active
-    if sheet is None:  # pragma: no cover - a new workbook always has an active sheet
-        sheet = workbook.create_sheet("profiles")
-    sheet.title = "profiles"
-    sheet.append(FLAT_COLUMNS)
-    for row in rows:
-        sheet.append([row.get(column) for column in FLAT_COLUMNS])
+    workbook.remove(workbook.active)  # drop the default sheet; write() creates all
+
+    def write(title: str, columns: list[str], records: list[dict[str, Any]]) -> None:
+        sheet = workbook.create_sheet(title)
+        sheet.append(columns)
+        for record in records:
+            sheet.append([record.get(column) for column in columns])
+
+    write("profiles", FLAT_COLUMNS, rows)
+    section_columns = {
+        "experience": ["linkedin_url", "title", "company_name", "company_url",
+                        "location", "start_date", "end_date", "is_current"],
+        "education": ["linkedin_url", "school_name", "degree_name", "field_of_study",
+                       "start_date", "end_date"],
+        "skills": ["linkedin_url", "name"],
+        "certifications": ["linkedin_url", "name", "authority", "license_number",
+                            "start_date", "end_date"],
+        "languages": ["linkedin_url", "name", "proficiency"],
+    }
+    for sheet_name, columns in section_columns.items():
+        records: list[dict[str, Any]] = []
+        for url, sections in sections_by_url.items():
+            for item in sections.get(sheet_name, []) or []:
+                record = {"linkedin_url": url, **item}
+                records.append(_spreadsheet_safe(record))
+        write(sheet_name, columns, records)
+    write(
+        "provenance",
+        ["linkedin_url", "source_type", "source_name", "sheet", "row", "column", "offset", "original_text"],
+        [
+            {"linkedin_url": url, **occurrence}
+            for url, occurrences in provenance_by_url.items()
+            for occurrence in occurrences
+        ],
+    )
+    write("failures", ["linkedin_url", "status", "error_code", "error_detail"], failures)
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
@@ -95,7 +150,20 @@ def json_document(batch_summary: dict[str, Any], rows: list[dict[str, Any]]) -> 
     ).encode("utf-8")
 
 
-def _field(profile: dict[str, Any], name: str) -> Any:
+def report_hash(report: dict[str, Any], generator_version: str) -> str:
+    """Stable hash for the deterministic report (same input + version ⇒ same)."""
+    import hashlib
+
+    payload = json.dumps(
+        {"generator_version": generator_version, "report": report},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def field_value(profile: dict[str, Any], name: str) -> Any:
     entry = (profile.get(name) or {})
     if isinstance(entry, dict):
         return entry.get("value")
@@ -109,7 +177,7 @@ def profile_report(response: dict[str, Any]) -> dict[str, Any]:
     null rather than prose. No external model is involved.
     """
     profile = response.get("profile", {})
-    experience = _field(profile, "experience") or []
+    experience = field_value(profile, "experience") or []
     current = next((item for item in experience if item.get("is_current")), None)
     return {
         "current_position": (
@@ -132,12 +200,12 @@ def profile_report(response: dict[str, Any]) -> dict[str, Any]:
                 "degree": item.get("degree_name"),
                 "field_of_study": item.get("field_of_study"),
             }
-            for item in _field(profile, "education") or []
+            for item in field_value(profile, "education") or []
         ],
-        "skills": [item.get("name") for item in _field(profile, "skills") or []],
-        "certifications": [item.get("name") for item in _field(profile, "certifications") or []],
-        "languages": [item.get("name") for item in _field(profile, "languages") or []],
-        "location": _field(profile, "location"),
+        "skills": [item.get("name") for item in field_value(profile, "skills") or []],
+        "certifications": [item.get("name") for item in field_value(profile, "certifications") or []],
+        "languages": [item.get("name") for item in field_value(profile, "languages") or []],
+        "location": field_value(profile, "location"),
         "retrieved_at": response.get("observed_at"),
     }
 
@@ -163,20 +231,20 @@ def aggregate(batch: Any) -> dict[str, Any]:
         succeeded += 1
         response = job.response.model_dump(mode="json")
         profile = response.get("profile", {})
-        experience = _field(profile, "experience") or []
+        experience = field_value(profile, "experience") or []
         experience_counts.append(len(experience))
         current = next((item for item in experience if item.get("is_current")), None)
         if current and current.get("title"):
             titles.append(current["title"])
         if current and current.get("company_name"):
             companies.append(current["company_name"])
-        location = _field(profile, "location")
+        location = field_value(profile, "location")
         if location:
             locations.append(location)
-        for item in _field(profile, "skills") or []:
+        for item in field_value(profile, "skills") or []:
             if item.get("name"):
                 skills.append(item["name"])
-        for item in _field(profile, "education") or []:
+        for item in field_value(profile, "education") or []:
             if item.get("school_name"):
                 schools.append(item["school_name"])
     total = len(getattr(batch, "jobs", []))
