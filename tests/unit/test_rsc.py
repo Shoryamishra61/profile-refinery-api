@@ -179,6 +179,39 @@ def test_experience_uses_semantic_collection_items_not_global_text() -> None:
     ]
 
 
+def test_experience_fallback_preserves_upstream_order() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-card-experience"},
+                "children": [
+                    _element(
+                        {
+                            "children": [
+                                "First Role",
+                                "First Company · Full-time",
+                                "Jan 2024 - Present · 2 yrs",
+                            ]
+                        }
+                    ),
+                    _element(
+                        {
+                            "children": [
+                                "Second Role",
+                                "Second Company · Internship",
+                                "Jan 2023 - Dec 2023 · 1 yr",
+                            ]
+                        }
+                    ),
+                ],
+            }
+        ),
+    )
+    result = parse_rsc_section_payload({"flight": text}, "experience")
+    assert [item["title"] for item in result] == ["First Role", "Second Role"]
+
+
 def test_part_one_decodes_education_and_certification_roots_independently() -> None:
     text = "\n".join(
         [

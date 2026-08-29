@@ -504,7 +504,7 @@ def _section_items(root: Any, lockup_view: str) -> list[tuple[str | None, Any]]:
 def _dated_semantic_items(root: Any) -> list[tuple[str | None, Any]]:
     """Find current SDUI lockups that expose no collection or lockup view name."""
 
-    candidates: list[tuple[int, tuple[str, ...], Any]] = []
+    candidates: list[tuple[int, int, tuple[str, ...], Any]] = []
     for node in _objects(root):
         texts = tuple(_visible_text(node))
         if len(texts) < 3:
@@ -515,15 +515,23 @@ def _dated_semantic_items(root: Any) -> list[tuple[str | None, Any]]:
         date_index, *_ = _date_range(list(texts))
         if date_index is None or date_index < 2:
             continue
-        candidates.append((len(json.dumps(node, separators=(",", ":"))), texts, node))
-    output: list[tuple[str | None, Any]] = []
-    seen: set[tuple[str, ...]] = set()
-    for _, texts, node in sorted(candidates, key=lambda candidate: candidate[0]):
-        if texts in seen:
-            continue
-        seen.add(texts)
-        output.append((None, node))
-    return output
+        candidates.append(
+            (
+                len(candidates),
+                len(json.dumps(node, separators=(",", ":"))),
+                texts,
+                node,
+            )
+        )
+    # A Flight lockup can appear through several nested wrappers. Select the
+    # smallest node for each identical semantic text sequence, but emit it at
+    # that sequence's first traversal position so LinkedIn ordering survives.
+    best: dict[tuple[str, ...], tuple[int, int, Any]] = {}
+    for order, size, texts, node in candidates:
+        current = best.get(texts)
+        if current is None or size < current[1]:
+            best[texts] = (order if current is None else current[0], size, node)
+    return [(None, node) for _, _, node in sorted(best.values(), key=lambda item: item[0])]
 
 
 def _visible_text(value: Any) -> list[str]:
