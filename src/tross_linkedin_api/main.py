@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from . import __version__
@@ -57,6 +58,35 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
             }
             return JSONResponse(body, status_code=response.status_code, headers=headers)
         return response
+
+    @application.exception_handler(RequestValidationError)
+    async def handle_request_validation(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        # FastAPI's default 422 body includes the rejected raw input. That is
+        # unsafe for request-scoped cookie fields, so validation diagnostics
+        # expose only location, type, and message for every endpoint.
+        errors = [
+            {
+                key: value
+                for key, value in error.items()
+                if key in {"loc", "msg", "type", "url"}
+            }
+            for error in exc.errors()
+        ]
+        request_id = getattr(request.state, "tross_request_id", None)
+        return JSONResponse(
+            {
+                "code": "REQUEST_VALIDATION_ERROR",
+                "title": "Request validation failed",
+                "status": 422,
+                "detail": "One or more request fields are invalid.",
+                "errors": errors,
+                "request_id": request_id,
+            },
+            status_code=422,
+            headers={"Cache-Control": "no-store, max-age=0"},
+        )
 
     @application.exception_handler(ValueError)
     async def handle_contract_failure(request: Request, exc: ValueError) -> JSONResponse:

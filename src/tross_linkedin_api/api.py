@@ -3,10 +3,11 @@ from __future__ import annotations
 import hmac
 import json
 import uuid
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Security, UploadFile
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 
 from .batch.service import BatchService
@@ -24,6 +25,14 @@ from .parsers import parse_section_payload
 from .rate_limit import SlidingWindowLimiter
 from .rsc import describe_rsc_payload
 from .runtime import Runtime
+from .session_extraction import (
+    ExtractionProblem,
+    SessionExtractionRequest,
+    SessionExtractionResponse,
+    SessionExtractionResult,
+)
+
+WEB_ROOT = Path(__file__).with_name("web")
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -52,9 +61,37 @@ def build_router(runtime: Runtime) -> APIRouter:
     )
     batches = BatchService(runtime)
 
-    @router.get("/", include_in_schema=False)
-    async def root() -> RedirectResponse:
-        return RedirectResponse(url="/docs")
+    @router.get("/", include_in_schema=False, response_class=HTMLResponse)
+    async def root() -> HTMLResponse:
+        return HTMLResponse(
+            WEB_ROOT.joinpath("index.html").read_text(encoding="utf-8"),
+            headers={
+                "Cache-Control": "no-cache",
+                "Content-Security-Policy": (
+                    "default-src 'self'; script-src 'self'; style-src 'self'; "
+                    "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
+                    "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+                ),
+                "Referrer-Policy": "no-referrer",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.get("/assets/app.css", include_in_schema=False)
+    async def app_css() -> Response:
+        return Response(
+            WEB_ROOT.joinpath("app.css").read_text(encoding="utf-8"),
+            media_type="text/css",
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+
+    @router.get("/assets/app.js", include_in_schema=False)
+    async def app_js() -> Response:
+        return Response(
+            WEB_ROOT.joinpath("app.js").read_text(encoding="utf-8"),
+            media_type="text/javascript",
+            headers={"Cache-Control": "public, max-age=300"},
+        )
 
     @router.get("/healthz", tags=["operations"])
     async def health() -> dict[str, str]:
@@ -137,6 +174,108 @@ def build_router(runtime: Runtime) -> APIRouter:
         response.request_id = request_id
         response.status = "partial" if response.partial else "succeeded"
         return response
+
+    @router.post(
+        "/v1/session-extractions",
+        response_model=SessionExtractionResponse,
+        responses={401: {}, 429: {}, 422: {}},
+        tags=["profiles"],
+    )
+    async def session_extraction(
+        request: Request,
+        body: SessionExtractionRequest,
+        x_api_key: str | None = Security(API_KEY_HEADER),
+    ) -> Response:
+        """Extract profiles with caller-supplied, request-scoped session material."""
+
+        caller = _authorized(x_api_key, runtime)
+        retry_after = limiter.check(caller)
+        if retry_after is not None:
+            raise CallerRateLimited(retry_after)
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        transient_settings = runtime.settings.model_copy(
+            update={
+                "linkedin_li_at": body.session.li_at,
+                "linkedin_jsessionid": body.session.jsessionid,
+                "linkedin_cookie": body.session.companion_cookies,
+                "linkedin_user_agent": body.session.user_agent,
+                "linkedin_accept_language": body.session.accept_language,
+            }
+        )
+        transient = Runtime(transient_settings)
+        results: list[SessionExtractionResult] = []
+        stop_after_challenge = False
+        try:
+            transient.ensure_profile_available()
+            for index, submitted_url in enumerate(body.urls):
+                if stop_after_challenge:
+                    results.append(
+                        SessionExtractionResult(
+                            input_url=submitted_url,
+                            status="skipped",
+                            error=ExtractionProblem(
+                                code="SKIPPED_AFTER_CHALLENGE",
+                                title="Extraction stopped",
+                                detail="No further profiles were requested after an upstream challenge.",
+                                status=503,
+                            ),
+                        )
+                    )
+                    continue
+                item_request_id = f"{request_id}-{index + 1}"
+                try:
+                    canonical = canonicalize_profile_url(submitted_url)
+                    profile_response = await transient.orchestrator.fetch(
+                        canonical, item_request_id
+                    )
+                    profile_response.request_id = item_request_id
+                    profile_response.status = (
+                        "partial" if profile_response.partial else "succeeded"
+                    )
+                    results.append(
+                        SessionExtractionResult(
+                            input_url=submitted_url,
+                            status=profile_response.status,
+                            profile=profile_response,
+                        )
+                    )
+                    stop_after_challenge = any(
+                        "session_challenged" in warning
+                        for warning in profile_response.meta.warnings
+                    )
+                except ProblemError as exc:
+                    retry_seconds = None
+                    if exc.extensions:
+                        candidate = exc.extensions.get("retry_after_seconds")
+                        retry_seconds = candidate if isinstance(candidate, int) else None
+                    results.append(
+                        SessionExtractionResult(
+                            input_url=submitted_url,
+                            status="failed",
+                            error=ExtractionProblem(
+                                code=exc.code,
+                                title=exc.title,
+                                detail=exc.detail,
+                                status=exc.status,
+                                retry_after_seconds=retry_seconds,
+                            ),
+                        )
+                    )
+                    stop_after_challenge = exc.code in {
+                        "UPSTREAM_CHALLENGE",
+                        "UPSTREAM_CIRCUIT_OPEN",
+                    }
+        finally:
+            await transient.aclose()
+        payload = SessionExtractionResponse(request_id=request_id, results=results)
+        return JSONResponse(
+            payload.model_dump(mode="json"),
+            headers={
+                "Cache-Control": "no-store, max-age=0",
+                "Pragma": "no-cache",
+                "X-Credential-Handling": "request-memory-only",
+            },
+        )
 
     @router.get("/v1/protocol-probe", tags=["operations"], include_in_schema=False)
     async def protocol_probe(

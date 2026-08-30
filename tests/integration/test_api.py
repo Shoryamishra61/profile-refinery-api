@@ -4,12 +4,17 @@ import httpx
 import pytest
 from conftest import FULL_PROFILE_FIXTURE
 
+import tross_linkedin_api.api as api_module
 from tross_linkedin_api.errors import (
     ProfileNotFound,
     UpstreamChallenge,
     UpstreamOperationDrift,
     UpstreamTimeout,
 )
+from tross_linkedin_api.runtime import Runtime as RealRuntime
+
+REQUEST_LI_AT_SENTINEL = "request-only-" + "li-at-sentinel-value"
+REQUEST_JSESSION_SENTINEL = "ajax:" + "request-only-jsession"
 
 
 @pytest.mark.asyncio
@@ -232,6 +237,141 @@ async def test_openapi_documents_security(client: httpx.AsyncClient) -> None:
     assert any(item.get("name") == "X-API-Key" for item in schemes.values())
     assert "/v1/batches" in document["paths"]
     assert "/v1/batches/{batch_id}/export" in document["paths"]
+    assert document["paths"]["/v1/session-extractions"]["post"]["security"]
+
+
+@pytest.mark.asyncio
+async def test_extraction_desk_and_assets_are_public(client: httpx.AsyncClient) -> None:
+    page = await client.get("/")
+    stylesheet = await client.get("/assets/app.css")
+    script = await client.get("/assets/app.js")
+    assert page.status_code == 200
+    assert "Tross Profile Refinery" in page.text
+    assert "Request memory only" in page.text
+    assert "localStorage" not in script.text
+    assert stylesheet.status_code == 200
+    assert script.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_request_scoped_session_extracts_without_echoing_secrets(
+    client: httpx.AsyncClient,
+    stub_transport: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_settings = []
+
+    def transient_factory(settings: object) -> RealRuntime:
+        captured_settings.append(settings)
+        return RealRuntime(settings, transport=stub_transport)
+
+    monkeypatch.setattr(api_module, "Runtime", transient_factory)
+    sentinel_li_at = REQUEST_LI_AT_SENTINEL
+    sentinel_jsession = REQUEST_JSESSION_SENTINEL
+    sentinel_companions = "bcookie=request-only-bcookie; liap=true"
+    response = await client.post(
+        "/v1/session-extractions",
+        headers={"X-API-Key": "test-api-key", "X-Request-ID": "desk-run"},
+        json={
+            "urls": ["https://www.linkedin.com/in/test-integration-profile/"],
+            "session": {
+                "li_at": sentinel_li_at,
+                "jsessionid": sentinel_jsession,
+                "companion_cookies": sentinel_companions,
+                "user_agent": "Mozilla/5.0 request-scoped test browser",
+                "accept_language": "en-US,en;q=0.9",
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.headers["cache-control"].startswith("no-store")
+    assert response.headers["x-credential-handling"] == "request-memory-only"
+    body = response.json()
+    assert body["credential_handling"] == "request_memory_only"
+    assert body["results"][0]["status"] == "succeeded"
+    assert body["results"][0]["profile"]["profile"]["name"]["value"] == "Integration Check"
+    assert "request-only" not in response.text
+    assert len(captured_settings) == 1
+    assert captured_settings[0].linkedin_li_at.get_secret_value() == sentinel_li_at
+    assert captured_settings[0].linkedin_jsessionid.get_secret_value() == sentinel_jsession
+
+
+@pytest.mark.asyncio
+async def test_request_scoped_extraction_stops_after_challenge(
+    client: httpx.AsyncClient,
+    stub_transport: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub_transport.set("profile_view", [UpstreamChallenge()])
+    monkeypatch.setattr(
+        api_module,
+        "Runtime",
+        lambda settings: RealRuntime(settings, transport=stub_transport),
+    )
+    response = await client.post(
+        "/v1/session-extractions",
+        headers={"X-API-Key": "test-api-key"},
+        json={
+            "urls": [
+                "https://www.linkedin.com/in/first-profile/",
+                "https://www.linkedin.com/in/second-profile/",
+            ],
+            "session": {
+                "li_at": REQUEST_LI_AT_SENTINEL,
+                "jsessionid": REQUEST_JSESSION_SENTINEL,
+                "user_agent": "Mozilla/5.0 request-scoped test browser",
+            },
+        },
+    )
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert results[0]["error"]["code"] == "UPSTREAM_CHALLENGE"
+    assert results[1]["status"] == "skipped"
+    assert results[1]["error"]["code"] == "SKIPPED_AFTER_CHALLENGE"
+    assert stub_transport.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_request_scoped_extraction_requires_tross_api_key(
+    client: httpx.AsyncClient,
+) -> None:
+    response = await client.post(
+        "/v1/session-extractions",
+        json={
+            "urls": ["https://www.linkedin.com/in/test-profile/"],
+            "session": {
+                "li_at": REQUEST_LI_AT_SENTINEL,
+                "jsessionid": REQUEST_JSESSION_SENTINEL,
+                "user_agent": "Mozilla/5.0 request-scoped test browser",
+            },
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["code"] == "UNAUTHORIZED_CALLER"
+
+
+@pytest.mark.asyncio
+async def test_request_validation_never_echoes_rejected_session_secret(
+    client: httpx.AsyncClient,
+) -> None:
+    rejected_secret = "short-" + "secret-with-newline\nprivate-tail"
+    response = await client.post(
+        "/v1/session-extractions",
+        headers={"X-API-Key": "test-api-key"},
+        json={
+            "urls": ["https://www.linkedin.com/in/test-profile/"],
+            "session": {
+                "li_at": rejected_secret,
+                "jsessionid": REQUEST_JSESSION_SENTINEL,
+                "user_agent": "Mozilla/5.0 request-scoped test browser",
+            },
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "REQUEST_VALIDATION_ERROR"
+    assert rejected_secret not in response.text
+    assert "private-tail" not in response.text
+    assert response.headers["cache-control"].startswith("no-store")
 
 
 @pytest.mark.asyncio

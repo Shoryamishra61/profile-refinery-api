@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Turn LinkedIn profile URLs into a structured, provenance-rich dataset with your own request-scoped session.">
+  <title>Tross Profile Refinery</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#extractor">Skip to extractor</a>
+  <header class="masthead">
+    <a class="wordmark" href="/" aria-label="Tross home">
+      <span class="wordmark-mark" aria-hidden="true">T</span>
+      <span>TROSS / PROFILE REFINERY</span>
+    </a>
+    <nav aria-label="Utility links">
+      <a href="/docs">API docs</a>
+      <a href="/healthz">Status</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow">DIRECT HTTP · REQUEST-SCOPED SESSION · NO BROWSER AUTOMATION</p>
+        <h1 id="hero-title">Bring profile URLs.<br><em>Leave with usable data.</em></h1>
+        <p class="lede">A focused extraction desk for people who need structured LinkedIn profile data—not another dashboard. Your session is used only for this request and is never returned in the output.</p>
+      </div>
+      <div class="exchange" aria-label="Input and output summary">
+        <div class="exchange-cell">
+          <span class="exchange-index">01 / YOU GIVE</span>
+          <strong>Profile URLs</strong>
+          <strong>LinkedIn session</strong>
+          <strong>User-Agent</strong>
+        </div>
+        <div class="exchange-arrow" aria-hidden="true">→</div>
+        <div class="exchange-cell output">
+          <span class="exchange-index">02 / YOU GET</span>
+          <strong>Normalized profiles</strong>
+          <strong>Evidence status</strong>
+          <strong>JSON + CSV</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace" id="extractor" aria-labelledby="extractor-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">NEW EXTRACTION</p>
+          <h2 id="extractor-title">Load the source material</h2>
+        </div>
+        <div class="privacy-seal">
+          <span aria-hidden="true">●</span>
+          <div><strong>Request memory only</strong><br><small>No database. No cookie echo. No localStorage.</small></div>
+        </div>
+      </div>
+
+      <form id="extraction-form" novalidate>
+        <div class="form-grid">
+          <div class="input-column">
+            <div class="field-block field-block-primary">
+              <div class="field-heading">
+                <label for="profile-urls">LinkedIn profile URLs</label>
+                <span id="url-count">0 / 10</span>
+              </div>
+              <textarea id="profile-urls" rows="7" spellcheck="false" required placeholder="https://www.linkedin.com/in/profile-one/&#10;https://www.linkedin.com/in/profile-two/"></textarea>
+              <p class="field-help">One public profile URL per line. Up to 10 profiles, processed sequentially.</p>
+            </div>
+
+            <div class="field-block">
+              <label for="api-key">Tross API key</label>
+              <div class="secret-control">
+                <input id="api-key" type="password" autocomplete="off" required placeholder="Required to call this deployment">
+                <button class="reveal" type="button" data-reveal="api-key" aria-label="Show Tross API key">SHOW</button>
+              </div>
+              <p class="field-help">Authorizes this API call. It is not your LinkedIn password.</p>
+            </div>
+          </div>
+
+          <fieldset class="session-column">
+            <legend>LinkedIn session envelope</legend>
+            <p class="session-note">Copy current cookie values from a LinkedIn session you own. Never enter your LinkedIn password.</p>
+
+            <div class="field-block">
+              <label for="li-at">li_at cookie value</label>
+              <div class="secret-control">
+                <input id="li-at" type="password" autocomplete="off" required minlength="20" placeholder="Value only — do not include li_at=">
+                <button class="reveal" type="button" data-reveal="li-at" aria-label="Show li_at cookie">SHOW</button>
+              </div>
+            </div>
+
+            <div class="field-block">
+              <label for="jsessionid">JSESSIONID cookie value</label>
+              <div class="secret-control">
+                <input id="jsessionid" type="password" autocomplete="off" required placeholder="ajax:… (quotes are accepted)">
+                <button class="reveal" type="button" data-reveal="jsessionid" aria-label="Show JSESSIONID cookie">SHOW</button>
+              </div>
+            </div>
+
+            <div class="field-block">
+              <label for="companion-cookies">Companion cookies <span>recommended</span></label>
+              <div class="secret-control">
+                <input id="companion-cookies" type="password" autocomplete="off" spellcheck="false" placeholder="bcookie=…; bscookie=…; liap=true">
+                <button class="reveal" type="button" data-reveal="companion-cookies" aria-label="Show companion cookies">SHOW</button>
+              </div>
+              <p class="field-help">Cookie-header format. Do not repeat li_at or JSESSIONID here.</p>
+            </div>
+
+            <details class="advanced">
+              <summary>Request fingerprint</summary>
+              <div class="advanced-grid">
+                <div class="field-block">
+                  <label for="user-agent">User-Agent</label>
+                  <textarea id="user-agent" rows="3" required spellcheck="false"></textarea>
+                </div>
+                <div class="field-block">
+                  <label for="accept-language">Accept-Language</label>
+                  <input id="accept-language" value="en-US,en;q=0.9" required>
+                </div>
+              </div>
+            </details>
+          </fieldset>
+        </div>
+
+        <div class="action-bar">
+          <div class="action-copy">
+            <strong id="action-title">Ready to refine</strong>
+            <span id="action-detail">Credentials are cleared from this page after submission.</span>
+          </div>
+          <button class="extract-button" id="extract-button" type="submit">
+            <span>Run extraction</span><span aria-hidden="true">↗</span>
+          </button>
+        </div>
+        <div class="form-error" id="form-error" role="alert" hidden></div>
+      </form>
+    </section>
+
+    <section class="results" id="results" aria-labelledby="results-title" hidden>
+      <div class="section-heading results-heading">
+        <div>
+          <p class="eyebrow">EXTRACTION OUTPUT</p>
+          <h2 id="results-title">The refined dataset</h2>
+        </div>
+        <div class="export-actions">
+          <button type="button" id="download-json">Download JSON</button>
+          <button type="button" id="download-csv">Download CSV</button>
+        </div>
+      </div>
+      <div class="run-summary" id="run-summary" aria-live="polite"></div>
+      <div class="result-list" id="result-list"></div>
+    </section>
+
+    <section class="field-ledger" aria-labelledby="ledger-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">OUTPUT CONTRACT</p>
+          <h2 id="ledger-title">What this refinery actually returns</h2>
+        </div>
+        <p class="ledger-intro">Observed fields are emitted with provenance and explicit availability. Missing upstream evidence stays missing.</p>
+      </div>
+      <div class="ledger-grid">
+        <article>
+          <span class="status-chip observed">OBSERVED</span>
+          <h3>Identity &amp; overview</h3>
+          <p>Name, first/last name, headline, location, about, profile URL, public identifier, member URN, profile and background images.</p>
+        </article>
+        <article>
+          <span class="status-chip observed">OBSERVED</span>
+          <h3>Career &amp; education</h3>
+          <p>Experience, company, title, dates, descriptions, locations, education, skills, certifications, and languages when visible.</p>
+        </article>
+        <article>
+          <span class="status-chip unavailable">NOT INVENTED</span>
+          <h3>Outside the current contract</h3>
+          <p>Professional email, company industry/website, follower and connection counts, connection degree, hiring badge, and mutual-connection URLs.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>TROSS / EVIDENCE-FIRST PROFILE DATA</span>
+    <span>Use only with an authorized account and lawful purpose.</span>
+  </footer>
+</body>
+</html>

@@ -106,6 +106,42 @@ section RSC requests -> semantic Flight parser -> schema 1.2.0
 
 ## API
 
+The deployment root is an extraction desk for request-scoped sessions. A caller
+submits up to 10 profile URLs, their current `li_at` and `JSESSIONID` cookie
+values, optional companion cookies, User-Agent, and Accept-Language. These
+values live only in the request's isolated runtime: they are not written to the
+job store, logged, cached, returned, or retained after the transport closes.
+The response carries `Cache-Control: no-store`, and the page clears all secret
+inputs immediately after submission. This is an alternative to configuring a
+shared LinkedIn session in the backend; `X-API-Key` still protects the Tross
+deployment.
+
+```text
+POST /v1/session-extractions
+X-API-Key: <Tross caller key>
+
+{
+  "urls": ["https://www.linkedin.com/in/example/"],
+  "session": {
+    "li_at": "<request-scoped value>",
+    "jsessionid": "<request-scoped value>",
+    "companion_cookies": "bcookie=...; bscookie=...; liap=true",
+    "user_agent": "<the session's browser User-Agent>",
+    "accept_language": "en-US,en;q=0.9"
+  }
+}
+```
+
+Profiles are processed sequentially. An upstream challenge or open circuit
+stops the remaining list; skipped entries are explicit and no alternate account,
+proxy rotation, browser, fixture, or replay is attempted. The web interface can
+download the returned normalized records as JSON or a safe flattened CSV.
+Fields outside the current direct-HTTP contract—such as professional email,
+company industry, follower counts, and connection degree—remain unavailable
+rather than being inferred.
+
+The original server-configured single-profile endpoint remains available:
+
 ```bash
 curl -H "X-API-Key: $KEY" \
   "https://tross-linkedin-profile-api.vercel.app/v1/profiles?url=https://www.linkedin.com/in/example/"
@@ -249,7 +285,7 @@ uv run python scripts/security_audit.py
 uv run pip-audit
 ```
 
-Current acceptance-suite count: `143` tests. This count is updated
+Current acceptance-suite count: `148` tests. This count is updated
 from the full `pytest` run; it is not evidence of live LinkedIn extraction.
 
 ## Known limitations
