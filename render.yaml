@@ -13,16 +13,12 @@ services:
         sync: false
       - key: LINKEDIN_JSESSIONID
         sync: false
-      - key: LINKEDIN_PROFILE_CORE_QUERY_ID
+      - key: LINKEDIN_COOKIE
         sync: false
-      - key: LINKEDIN_EXPERIENCE_QUERY_ID
+      - key: LINKEDIN_EGRESS_PROXY
         sync: false
-      - key: LINKEDIN_EDUCATION_QUERY_ID
+      - key: LINKEDIN_USER_AGENT
         sync: false
-      - key: LINKEDIN_SKILLS_QUERY_ID
-        sync: false
-      - key: LINKEDIN_CERTIFICATIONS_QUERY_ID
-        sync: false
-      - key: LINKEDIN_LANGUAGES_QUERY_ID
+      - key: LINKEDIN_ACCEPT_LANGUAGE
         sync: false
 

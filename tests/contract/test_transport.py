@@ -93,6 +93,29 @@ def live_components(
     return settings, registry, session, transport
 
 
+@pytest.mark.asyncio
+async def test_client_enables_http2_and_uses_configured_static_proxy(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    real_client = httpx.AsyncClient
+
+    def recording_client(**kwargs: object) -> httpx.AsyncClient:
+        captured.update(kwargs)
+        return real_client(**kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", recording_client)
+    settings = Settings(
+        app_api_keys=["caller"],
+        linkedin_egress_proxy="http://proxy.example:8080",
+    )
+    registry = OperationRegistry.load(Path("config/operation_registry.yaml"))
+    transport = LinkedInTransport(settings, registry, SessionProvider(settings))
+    await transport.aclose()
+
+    assert captured["http2"] is True
+    assert captured["follow_redirects"] is False
+    assert captured["proxy"] == "http://proxy.example:8080"
+
+
 def registry_with_decoration(tmp_path: Path, decorations: list[str]) -> OperationRegistry:
     registry_path = tmp_path / "registry.yaml"
     decoration_lines = "".join(f"      - {item}\n" for item in decorations)
@@ -342,6 +365,28 @@ async def test_timeout_maps_to_upstream_timeout(monkeypatch) -> None:
     respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(side_effect=httpx.ReadTimeout("x"))
     with pytest.raises(UpstreamTimeout):
         await transport.execute("profile_view", "some-person", "req-1")
+    await transport.aclose()
+
+
+@respx.mock
+async def test_connection_failure_maps_to_upstream_unavailable(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    respx.get(f"https://www.linkedin.com{DASH_PATH}").mock(
+        side_effect=httpx.ConnectError("connection refused")
+    )
+    with pytest.raises(UpstreamUnavailable):
+        await transport.execute("profile_view", "some-person", "req-1")
+    await transport.aclose()
+
+
+@respx.mock
+async def test_page_connection_failure_maps_to_upstream_unavailable(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    respx.get("https://www.linkedin.com/in/some-person/").mock(
+        side_effect=httpx.ConnectError("connection refused")
+    )
+    with pytest.raises(UpstreamUnavailable):
+        await transport.execute("profile_page", "some-person", "req-1")
     await transport.aclose()
 
 

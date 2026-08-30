@@ -150,7 +150,16 @@ class LinkedInTransport:
         self._session = session
         timeout = httpx.Timeout(settings.app_upstream_timeout_seconds, connect=5.0)
         limits = httpx.Limits(max_connections=10, max_keepalive_connections=5)
-        self._client = httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=False)
+        proxy = settings.linkedin_egress_proxy
+        client_options: dict[str, Any] = {
+            "timeout": timeout,
+            "limits": limits,
+            "follow_redirects": False,
+            "http2": True,
+        }
+        if proxy is not None:
+            client_options["proxy"] = proxy.get_secret_value()
+        self._client = httpx.AsyncClient(**client_options)
         if self._session.available:
             seeded = self._session.load()
             self._client.cookies.set("li_at", seeded.li_at, domain=".linkedin.com")
@@ -312,7 +321,7 @@ class LinkedInTransport:
         except httpx.TimeoutException as exc:
             raise UpstreamTimeout(operation.semantic_name) from exc
         except (httpx.ConnectError, httpx.ReadError) as exc:
-            raise UpstreamTimeout(operation.semantic_name) from exc
+            raise UpstreamUnavailable(operation.semantic_name) from exc
 
     async def _execute_restli(
         self, operation: Operation, slug: str, request_id: str, resource_id: str | None = None
@@ -449,8 +458,8 @@ class LinkedInTransport:
             timeout_error = UpstreamTimeout(operation.semantic_name)
             raise timeout_error from exc
         except (httpx.ConnectError, httpx.ReadError) as exc:
-            timeout_error = UpstreamTimeout(operation.semantic_name)
-            raise timeout_error from exc
+            unavailable_error = UpstreamUnavailable(operation.semantic_name)
+            raise unavailable_error from exc
 
     async def _execute_page(
         self, operation: Operation, slug: str, request_id: str
@@ -462,6 +471,8 @@ class LinkedInTransport:
             response = await self._client.get(url, headers=headers, follow_redirects=False)
         except httpx.TimeoutException as exc:
             raise UpstreamTimeout(operation.semantic_name) from exc
+        except (httpx.ConnectError, httpx.ReadError) as exc:
+            raise UpstreamUnavailable(operation.semantic_name) from exc
         self.call_count += 1
         duration = (time.perf_counter() - started) * 1000
         self._classify_page_status(response, operation.semantic_name)

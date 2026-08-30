@@ -25,8 +25,15 @@ def canonicalize_profile_url(raw_url: str) -> CanonicalProfile:
     if len(raw) > 2048 or any(ord(char) < 32 for char in raw):
         raise InvalidProfileUrl("The profile URL is invalid or too long.")
 
+    # The public input contract accepts the two unambiguous LinkedIn host
+    # spellings without a scheme. Normalize them before the strict URL/SSRF
+    # boundary so the remainder of the validation path stays identical.
+    normalized_input = raw
+    if raw.lower().startswith(("linkedin.com/", "www.linkedin.com/")):
+        normalized_input = f"https://{raw}"
+
     try:
-        parsed: SplitResult = urlsplit(raw)
+        parsed: SplitResult = urlsplit(normalized_input)
         host = parsed.hostname
         port = parsed.port
     except (UnicodeError, ValueError) as exc:
@@ -66,4 +73,4 @@ def canonicalize_profile_url(raw_url: str) -> CanonicalProfile:
 
     slug = segments[1]
     canonical = f"https://www.linkedin.com/in/{slug}"
-    return CanonicalProfile(input_url=raw, canonical_url=canonical, slug=slug)
+    return CanonicalProfile(input_url=normalized_input, canonical_url=canonical, slug=slug)

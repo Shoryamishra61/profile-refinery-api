@@ -7,7 +7,6 @@ import asyncio
 import json
 from pathlib import Path
 
-from dotenv import dotenv_values
 from pydantic import SecretStr
 
 from tross_linkedin_api.canonicalizer import canonicalize_profile_url
@@ -16,17 +15,9 @@ from tross_linkedin_api.runtime import Runtime
 
 
 async def run(env_file: Path, profile_url: str) -> None:
-    values = dotenv_values(env_file)
-
-    def secret(name: str) -> SecretStr | None:
-        value = values.get(name)
-        return SecretStr(value) if value else None
-
     settings = Settings(
+        _env_file=env_file,
         app_api_keys=[SecretStr("local-live-smoke")],
-        linkedin_li_at=secret("LINKEDIN_LI_AT"),
-        linkedin_jsessionid=secret("LINKEDIN_JSESSIONID"),
-        linkedin_cookie=secret("LINKEDIN_COOKIE"),
         app_upstream_retries=0,
     )
     runtime = Runtime(settings)

@@ -7,6 +7,17 @@ no fixture or replay fallback in `APP_MODE=live`.
 - API: <https://tross-linkedin-profile-api.vercel.app>
 - Repository: <https://github.com/Shoryamishra61/tross-linkedin-profile-api>
 
+## Problem and design boundary
+
+The assignment requires semantic profile data, not rendered page markup. Tross
+therefore sends bounded requests to registered LinkedIn operations, decodes
+Rest.li JSON or React Flight records, establishes target ownership, and validates
+the normalized result before returning it. Direct HTTP keeps the acquisition
+contract deterministic and auditable. It does not make upstream access
+guaranteed: challenges, expired sessions, unknown shapes, and unavailable
+operations are typed failures and never trigger browser, fixture, or replay
+fallbacks.
+
 ## Current production status
 
 Production is **not live-verified**. For request `final-p0-acceptance-2`, the
@@ -156,25 +167,78 @@ material for an account the operator owns:
 LINKEDIN_LI_AT=<li_at value>
 LINKEDIN_JSESSIONID=<JSESSIONID value>
 LINKEDIN_COOKIE=<optional additional cookie header>
+LINKEDIN_EGRESS_PROXY=<optional single static HTTP(S) proxy URL>
+LINKEDIN_USER_AGENT=<exact user agent associated with the owned session>
+LINKEDIN_ACCEPT_LANGUAGE=<language header associated with that session>
 ```
 
 Cookie values, CSRF values, and API keys must never be logged, committed, or
 included in comparison reports. Live mode fails closed when session material or
-semantic identity is unavailable.
+semantic identity is unavailable. `LINKEDIN_EGRESS_PROXY` is optional and is
+passed to HTTPX as one operator-managed endpoint; Tross does not rotate proxies.
+When it is absent, HTTPX may use the standard `HTTPS_PROXY`/`ALL_PROXY`
+environment configuration. The transport enables HTTP/2 and never follows
+redirects automatically.
+
+Other supported environment names are documented in `.env.example`: caller
+rate limits, upstream timeout/size/retry limits, governor and breaker settings,
+schema/registry paths, and the local store path. Values belong only in local or
+deployment secrets.
+
+## Local setup
+
+```bash
+uv sync --extra dev
+cp .env.example .env
+uv run uvicorn tross_linkedin_api.main:app --host 127.0.0.1 --port 8000
+```
+
+Populate only the owned-session and caller-key values needed for the run. With
+no LinkedIn session configured, `/healthz` remains healthy while `/readyz` and
+profile extraction fail closed.
+
+## Production deployment
+
+`vercel.json` deploys the FastAPI public surface to Vercel. `Dockerfile` and
+`render.yaml` provide a persistent-process alternative. Set secret values in the
+host's environment and never commit `.env`.
+
+The production trace above proves that Vercel reached LinkedIn and received a
+302 on the authenticated page fallback. It does **not** prove why LinkedIn chose
+that response or that changing egress will fix it. A single static egress proxy
+can be configured with `LINKEDIN_EGRESS_PROXY` for a controlled environment
+comparison; it is not a success guarantee and must not be used as a rotating or
+access-control-circumvention mechanism.
+
+There is no profile-response cache in live mode. Consequently, a live response
+cannot be served stale, from replay, or from a fixture.
 
 ## Local verification
 
 ```bash
 uv sync --extra dev
 uv run pytest
-uv run ruff check src tests scripts
-uv run mypy
+uv run ruff check src tests config scripts
+uv run mypy src/tross_linkedin_api
 uv run python scripts/security_audit.py
 uv run pip-audit
 ```
 
-Current acceptance-suite count: `138` tests. This count is updated
+Current acceptance-suite count: `143` tests. This count is updated
 from the full `pytest` run; it is not evidence of live LinkedIn extraction.
+
+## Known limitations
+
+- The latest production core trace is not usable live evidence: the primary RSC
+  response lacked target identity and the authenticated page fallback received
+  a 302 challenge.
+- The repository contains sanitized synthetic parser fixtures, but no checked-in
+  real HAR payload with non-empty Certifications and Languages. Those two
+  non-empty parser cases remain `SYNTHETIC_UNIT`, not `REAL_HAR_REPLAY` or `LIVE`.
+- The configured static proxy and alternative persistent host are deployment
+  options only. Neither has been verified to change LinkedIn's response.
+- Profile completeness is viewer- and upstream-contract-dependent. Legitimately
+  absent data remains null or empty; unknown data is never inferred.
 
 ## Safety boundary
 

@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # ("name=value; name=value"). Supplements li_at/JSESSIONID with the
     # companion cookies a real browser session carries.
     linkedin_cookie: SecretStr | None = None
+    # Optional single, operator-managed egress proxy. This is deliberately one
+    # static endpoint: the service never rotates proxies or selects identities.
+    linkedin_egress_proxy: SecretStr | None = None
     linkedin_user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"

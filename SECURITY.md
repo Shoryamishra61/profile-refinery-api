@@ -1,5 +1,19 @@
 # Security
 
+## 2026-08-30 credential-material incident
+
+Historical versions of `scripts/session_capture_watch.py` contained literal
+LinkedIn companion-cookie values. The values first appeared in commit
+`c013a500e3e924e1b09ddf9ddf9a9cf002dc8816` and remained in the public history
+through `f91b5ecd1ea956cea329a3f062d151a4ac1397c2`. They were removed from the
+current tree; the script now reads optional companion cookies from the
+`LINKEDIN_COOKIE` secret at runtime.
+
+The public Git history was not rewritten because downstream clones may already
+exist. The affected LinkedIn session and its complete cookie set must be
+invalidated and renewed by the account owner. Historical values must be treated
+as compromised even if they have expired.
+
 ## Implemented controls
 
 - Exact ASCII host allowlist for `linkedin.com` and `www.linkedin.com`; HTTPS and port 443 only.
