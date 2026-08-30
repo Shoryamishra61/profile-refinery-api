@@ -1,6 +1,6 @@
 """Upstream shape → typed internal dicts.
 
-Parsers consume a :class:`~tross_linkedin_api.graph.NormalizedGraph` and never
+Parsers consume a :class:`~profile_refinery_api.graph.NormalizedGraph` and never
 perform I/O (invariant I1/I3). Entity ownership is decided by the graph —
 target-reference traversal for profile payloads, root-reference traversal for
 section (profileCards) payloads — never by global ``$type`` scans of

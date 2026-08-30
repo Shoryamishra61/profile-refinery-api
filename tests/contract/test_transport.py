@@ -9,8 +9,8 @@ import pytest
 import respx
 from httpx import Response
 
-from tross_linkedin_api.config import Settings
-from tross_linkedin_api.errors import (
+from profile_refinery_api.config import Settings
+from profile_refinery_api.errors import (
     ProfileNotFound,
     UpstreamAuthExpired,
     UpstreamChallenge,
@@ -20,9 +20,9 @@ from tross_linkedin_api.errors import (
     UpstreamTimeout,
     UpstreamUnavailable,
 )
-from tross_linkedin_api.operation_registry import OperationRegistry, RegistryDocument
-from tross_linkedin_api.session import SessionProvider
-from tross_linkedin_api.transport import LinkedInTransport
+from profile_refinery_api.operation_registry import OperationRegistry, RegistryDocument
+from profile_refinery_api.session import SessionProvider
+from profile_refinery_api.transport import LinkedInTransport
 
 DASH_PATH = "/voyager/api/identity/dash/profiles"
 RSC_PATH = "/flagship-web/rsc-action/actions/component"

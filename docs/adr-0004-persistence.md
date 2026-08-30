@@ -5,7 +5,7 @@ Serverless instances are ephemeral; a restart must not destroy batches, and repe
 queue delivery must not duplicate upstream work.
 
 ## Decision
-JSON journal in `APP_STORE_DIR` (default `./.tross_store`, `/tmp` on Vercel): one
+JSON journal in `APP_STORE_DIR` (default `./.profile_refinery_store`, `/tmp` on Vercel): one
 atomic document per batch (temp file + os.replace), rewritten on every state
 transition, restored on process start. Job identity is deterministic:
 `sha256(canonical_url | parser_version)[:16]` — redelivery and restarts are safe.

@@ -1,8 +1,8 @@
 {
   "services": {
-    "tross-linkedin-profile-api": {
+    "profile-refinery-api": {
       "root": ".",
-      "entrypoint": "src.tross_linkedin_api.main:app"
+      "entrypoint": "src.profile_refinery_api.main:app"
     }
   },
   "rewrites": [
@@ -10,7 +10,7 @@
       "source": "/(.*)",
       "destination": {
         "type": "service",
-        "service": "tross-linkedin-profile-api"
+        "service": "profile-refinery-api"
       }
     }
   ]

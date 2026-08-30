@@ -36,10 +36,10 @@ class Metrics:
         families: dict[str, list[tuple[dict[str, str], float]]] = defaultdict(list)
         for key, value in self._counters.items():
             name, labels = _split_key(key)
-            families[f"tross_{name}_total"].append((labels, value))
+            families[f"profile_refinery_{name}_total"].append((labels, value))
         for key, value in self._gauges.items():
             name, labels = _split_key(key)
-            families[f"tross_{name}"].append((labels, value))
+            families[f"profile_refinery_{name}"].append((labels, value))
         for family, series in sorted(families.items()):
             lines.append(f"# TYPE {family} gauge")
             for labels, value in sorted(series, key=lambda item: str(item[0])):

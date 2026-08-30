@@ -8,7 +8,7 @@ by the architecture workload model:
   latency / success+failure counts / challenge+breaker events / total time.
 
 Usage:
-  TROSS_API_KEY=<key> python scripts/acceptance_run.py [--base URL] [--out file]
+  PROFILE_REFINERY_API_KEY=<key> python scripts/acceptance_run.py [--base URL] [--out file]
 """
 from __future__ import annotations
 
@@ -34,10 +34,10 @@ PROFILES = [
 
 async def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base", default="https://tross-linkedin-profile-api.vercel.app")
+    parser.add_argument("--base", default="https://profile-refinery-api.vercel.app")
     parser.add_argument("--out", default="C:/tmp/acceptance_result.json")
     args = parser.parse_args()
-    key = os.environ["TROSS_API_KEY"]
+    key = os.environ["PROFILE_REFINERY_API_KEY"]
     headers = {"X-API-Key": key}
     text = "\n".join(
         f"{i + 1}. https://www.linkedin.com/in/{slug}/" for i, slug in enumerate(PROFILES)

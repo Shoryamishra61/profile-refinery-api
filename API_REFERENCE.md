@@ -1,8 +1,22 @@
 # API Reference
 
+## `POST /v1/session-extractions`
+
+The public extraction-desk route accepts 1–10 LinkedIn profile URLs plus an
+authorized request-scoped LinkedIn session. It does not require a Profile
+Refinery account or product API key. Session fields are used only by an isolated
+in-memory runtime, the response is marked `Cache-Control: no-store`, and raw
+credentials never appear in response or validation-error bodies.
+
+Profiles run sequentially. A challenge or open circuit stops the remaining
+items and marks them explicitly as skipped.
+
 ## `GET /v1/profiles`
 
-Query parameter `url` is required and must be an HTTPS `linkedin.com/in/{slug}` or `www.linkedin.com/in/{slug}` URL. Tracking query parameters are discarded. Header `X-API-Key` is required.
+This legacy operator route uses a backend-configured LinkedIn session. Query
+parameter `url` is required and must be an HTTPS `linkedin.com/in/{slug}` or
+`www.linkedin.com/in/{slug}` URL. Tracking query parameters are discarded. A
+generic operator `X-API-Key` is required.
 
 Success is HTTP 200 with schema version, input/canonical URLs, observation time, `partial`, required profile fields, per-field availability/provenance, and request metadata. Every profile key exists even when its value is unavailable.
 

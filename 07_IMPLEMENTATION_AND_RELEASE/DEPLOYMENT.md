@@ -4,11 +4,11 @@ Container listens on `0.0.0.0:${PORT}`. Endpoints: `/healthz`, `/readyz`, `/docs
 
 ## Vercel fixture deployment
 
-The repository declares `src.tross_linkedin_api.main:app` as its Vercel Python
+The repository declares `src.profile_refinery_api.main:app` as its Vercel Python
 entrypoint in `pyproject.toml`. Connect the public GitHub repository to Vercel and set:
 
 - `APP_MODE=fixture`
-- `APP_API_KEYS=<new random key>`
+- `APP_API_KEYS=<optional operator-route keys>`
 
 The fixture deployment is suitable for evaluator access and end-to-end API demonstration.
 It must remain labeled `FIXTURE_VERIFIED`; it is not evidence of current LinkedIn behavior.

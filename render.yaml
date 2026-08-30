@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: tross-linkedin-profile-api
+    name: profile-refinery-api
     runtime: docker
     plan: free
     healthCheckPath: /healthz

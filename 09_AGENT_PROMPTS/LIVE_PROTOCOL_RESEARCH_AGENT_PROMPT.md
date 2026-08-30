@@ -1,6 +1,6 @@
 # Live Protocol Research Agent Prompt
 
-Resolve only the next blocking semantic operation for the Tross no-browser direct-endpoint build.
+Resolve only the next blocking semantic operation for the Profile Refinery no-browser direct-endpoint build.
 
 Read `AGENTS.md`, `REVERSE_ENGINEERING_PROTOCOL.md`, `OPERATION_EVIDENCE_POLICY.md`.
 

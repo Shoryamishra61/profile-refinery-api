@@ -1,6 +1,6 @@
 # Likely Technical Q&A
 
-**Why no browser?** Tross explicitly prohibited it.
+**Why no browser?** Profile Refinery explicitly prohibited it.
 
 **Why Rest.li/GraphQL?** LinkedIn Engineering publicly documents both and says GraphQL powers the rearchitected Profile framework.
 

@@ -10,8 +10,8 @@ import openpyxl
 import pytest
 from conftest import FULL_PROFILE_FIXTURE, StubTransport
 
-from tross_linkedin_api.batch.exports import FLAT_COLUMNS
-from tross_linkedin_api.errors import ProfileNotFound, UpstreamTimeout
+from profile_refinery_api.batch.exports import FLAT_COLUMNS
+from profile_refinery_api.errors import ProfileNotFound, UpstreamTimeout
 
 TEXT = (
     "Team list:\n"

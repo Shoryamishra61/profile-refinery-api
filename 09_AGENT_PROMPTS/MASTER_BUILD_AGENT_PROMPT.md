@@ -1,6 +1,6 @@
 # Master Build Agent Prompt
 
-You are lead engineer for the Tross LinkedIn Profile API challenge. Read `AGENTS.md`, `MASTER_AUDIT.md`, `REQUIREMENTS.md`, `SRS.md`, `REVERSE_ENGINEERING_PROTOCOL.md`, `SYSTEM_DESIGN.md`, `TEST_PLAN.md`, `IMPLEMENTATION_PLAN.md`.
+You are lead engineer for the Profile Refinery LinkedIn Profile API challenge. Read `AGENTS.md`, `MASTER_AUDIT.md`, `REQUIREMENTS.md`, `SRS.md`, `REVERSE_ENGINEERING_PROTOCOL.md`, `SYSTEM_DESIGN.md`, `TEST_PLAN.md`, `IMPLEMENTATION_PLAN.md`.
 
 Mandatory: production directly hits LinkedIn endpoints and contains no browser runtime. The archived prototype is seed/evidence only; its live/performance claims are not automatically true.
 

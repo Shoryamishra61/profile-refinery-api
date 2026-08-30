@@ -22,7 +22,7 @@ profile JSON.
 | Experience/education/skills/certifications/languages live | BLOCKED | required current operation evidence absent |
 | Profile image live | BLOCKED | current core response absent |
 | Partial response behavior | PASS (`FIXTURE_VERIFIED`) | `test_optional_failure_returns_200_partial` |
-| Independent fixture benchmark | PASS | `uv run tross-benchmark --json --iterations 10`; independent expected file |
+| Independent fixture benchmark | PASS | `uv run profile-refinery-benchmark --json --iterations 10`; independent expected file |
 | Independent controlled-live benchmark with n | BLOCKED | no consented live profile set or operation |
 | No circular ground truth | PASS | benchmark loads checked-in expected file; source review/tests |
 | Schema fail closed | PASS | `test_schema_missing_fails_closed` |
@@ -61,7 +61,7 @@ profile JSON.
 
 1. Production has authorized session material, but the current upstream response
    sequence does not yield usable core identity.
-2. Vercel device authentication was completed and the service deployed at `https://tross-linkedin-profile-api.vercel.app`; hosting access is no longer a blocker.
+2. Vercel device authentication was completed and the service deployed at `https://profile-refinery-api.vercel.app`; hosting access is no longer a blocker.
 3. GitHub repository publication succeeded, but the OAuth token lacked `workflow` scope. GitHub rejected `.github/workflows/ci.yml`; no SSH key or connected browser was available to approve the device grant.
 4. Docker Desktop was initially stopped; it was started and the build/container smoke gate subsequently passed.
 5. Production starts in `APP_MODE=live` and readiness remains 503 until a
@@ -75,4 +75,4 @@ profile JSON.
 Offline/repository implementation: **PASS** after ingestion, batch, export,
 dependency, security, and reproducibility checks.
 
-Tross live assignment: **NOT PASS** until one owned-session core operation and required sections are independently verified, a controlled-live benchmark is run, and a public HTTPS deployment is externally exercised.
+Profile Refinery live assignment: **NOT PASS** until one owned-session core operation and required sections are independently verified, a controlled-live benchmark is run, and a public HTTPS deployment is externally exercised.

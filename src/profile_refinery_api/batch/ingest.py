@@ -172,7 +172,7 @@ def _ingest_pdf(payload: bytes, source_name: str) -> list[tuple[str, Occurrence]
         try:
             text = page.extract_text() or ""
         except Exception as exc:  # pypdf raises heterogeneous per-page errors
-            logging.getLogger("tross_linkedin_api").debug(
+            logging.getLogger("profile_refinery_api").debug(
                 "pdf_page_extraction_failed page=%s error_type=%s", page_number, type(exc).__name__
             )
             continue

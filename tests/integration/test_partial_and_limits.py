@@ -4,9 +4,9 @@ import httpx
 import pytest
 from conftest import StubTransport
 
-from tross_linkedin_api.config import Settings
-from tross_linkedin_api.main import create_app
-from tross_linkedin_api.runtime import Runtime
+from profile_refinery_api.config import Settings
+from profile_refinery_api.main import create_app
+from profile_refinery_api.runtime import Runtime
 
 
 @pytest.mark.asyncio

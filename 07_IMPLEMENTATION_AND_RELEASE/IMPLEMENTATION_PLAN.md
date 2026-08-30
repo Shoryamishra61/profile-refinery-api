@@ -6,7 +6,7 @@ Never edit `11_ARCHIVE_ORIGINALS/`. Build clean new application tree.
 
 ## Phase 1 Repository skeleton
 
-`src/tross_linkedin_api/`, tests, pyproject, env example, gitignore, Dockerfile, CI, schema, operation registry. Gate: clean install/test start/no-browser scan.
+`src/profile_refinery_api/`, tests, pyproject, env example, gitignore, Dockerfile, CI, schema, operation registry. Gate: clean install/test start/no-browser scan.
 
 ## Phase 2 Contracts/config
 
@@ -14,7 +14,8 @@ Typed settings, JSON Schema 2020-12, domain models, RFC 9457, strict startup val
 
 ## Phase 3 API boundary
 
-URL canonicalizer, required API key, caller limiter, health/readiness. Gate adversarial URLs/status tests.
+URL canonicalizer, public request-scoped caller limiter, operator-route API key,
+health/readiness. Gate adversarial URLs/status tests.
 
 ## Phase 4 Operation registry
 

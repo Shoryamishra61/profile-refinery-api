@@ -12,8 +12,8 @@ import sys
 
 import httpx
 
-BASE = os.environ.get("TROSS_BASE", "https://tross-linkedin-profile-api.vercel.app")
-KEY = os.environ["TROSS_API_KEY"]
+BASE = os.environ.get("PROFILE_REFINERY_BASE", "https://profile-refinery-api.vercel.app")
+KEY = os.environ["PROFILE_REFINERY_API_KEY"]
 SLUGS = ["williamhgates", "satyanadella", "reidhoffman"]
 SENTINELS = ("SYNTHETIC-001", "Synthetic Systems Ltd", "Example Research Lab")
 GAP_SECONDS = 20

@@ -5,7 +5,7 @@ import io
 
 import openpyxl
 
-from tross_linkedin_api.batch.exports import FLAT_COLUMNS, csv_bytes, xlsx_bytes
+from profile_refinery_api.batch.exports import FLAT_COLUMNS, csv_bytes, xlsx_bytes
 
 
 def test_csv_headers_are_deterministic_and_formula_cells_are_text() -> None:

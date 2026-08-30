@@ -7,14 +7,14 @@ import httpx
 import pytest
 from conftest import StubTransport
 
-from tross_linkedin_api.canonicalizer import canonicalize_profile_url
-from tross_linkedin_api.config import Settings
-from tross_linkedin_api.errors import LiveFixtureLeakDetected
-from tross_linkedin_api.main import create_app
-from tross_linkedin_api.operation_registry import OperationRegistry
-from tross_linkedin_api.orchestrator import ProfileOrchestrator
-from tross_linkedin_api.runtime import Runtime
-from tross_linkedin_api.validation import SchemaValidator
+from profile_refinery_api.canonicalizer import canonicalize_profile_url
+from profile_refinery_api.config import Settings
+from profile_refinery_api.errors import LiveFixtureLeakDetected
+from profile_refinery_api.main import create_app
+from profile_refinery_api.operation_registry import OperationRegistry
+from profile_refinery_api.orchestrator import ProfileOrchestrator
+from profile_refinery_api.runtime import Runtime
+from profile_refinery_api.validation import SchemaValidator
 
 
 def test_live_mode_without_session_fails_closed() -> None:
@@ -83,7 +83,7 @@ class _SentinelTransport:
     async def execute(
         self, semantic_name: str, slug: str, request_id: str, resource_id: str | None = None
     ) -> object:
-        from tross_linkedin_api.models import OperationResult
+        from profile_refinery_api.models import OperationResult
 
         payload = {
             "data": {"*elements": ["urn:li:fsd_profile:SYNTHETIC-001"]},

@@ -6,7 +6,7 @@
 - [ ] no path hacks
 - [ ] fixtures/schema/registry shipped
 
-## Tross pivot
+## Profile Refinery pivot
 
 - [ ] direct LinkedIn HTTP runtime
 - [ ] no Selenium/Playwright/Puppeteer/Chromium/DOM/browser fallback
@@ -33,7 +33,7 @@
 ## Security
 
 - [ ] no secrets in git/logs
-- [ ] API key required
+- [x] Public request-scoped route needs no product key; operator routes remain protected
 - [ ] fixed outbound host
 - [ ] SSRF/redirect tests
 - [ ] challenge fail-closed

@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from tross_linkedin_api.rsc import FlightDocument, parse_rsc_core_payload
+from profile_refinery_api.rsc import FlightDocument, parse_rsc_core_payload
 
 
 def _objects(value: Any) -> Iterator[dict[str, Any]]:

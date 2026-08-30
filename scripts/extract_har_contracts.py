@@ -9,7 +9,7 @@ import json
 import os
 from collections import Counter
 
-HAR = r"C:\code_shit\TROSS\TROSS MANUS DATA\www.linkedin.com.bilgates.har"
+HAR = r"C:\code_shit\PROFILE REFINERY\PROFILE REFINERY MANUS DATA\www.linkedin.com.bilgates.har"
 OUT = r"C:\tmp\har_extract"
 
 os.makedirs(OUT, exist_ok=True)

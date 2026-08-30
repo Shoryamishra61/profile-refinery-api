@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 from dotenv import dotenv_values
 
-from tross_linkedin_api.canonicalizer import canonicalize_profile_url
+from profile_refinery_api.canonicalizer import canonicalize_profile_url
 
 
 def main() -> None:

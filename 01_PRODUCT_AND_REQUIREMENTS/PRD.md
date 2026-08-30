@@ -2,7 +2,7 @@
 
 ## Product
 
-Tross LinkedIn Profile API.
+Profile Refinery LinkedIn Profile API.
 
 ## User/job
 

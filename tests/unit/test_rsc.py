@@ -5,8 +5,8 @@ from hashlib import sha256
 
 import pytest
 
-from tross_linkedin_api.errors import UpstreamOperationDrift
-from tross_linkedin_api.rsc import (
+from profile_refinery_api.errors import UpstreamOperationDrift
+from profile_refinery_api.rsc import (
     FlightDocument,
     build_profile_activity_body,
     build_profile_component_body,

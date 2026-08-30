@@ -7,8 +7,8 @@ import zipfile
 import openpyxl
 import pytest
 
-from tross_linkedin_api.batch.discovery import dedupe, discover_in_text
-from tross_linkedin_api.batch.ingest import IngestError, ingest, sanitize_filename, sniff_kind
+from profile_refinery_api.batch.discovery import dedupe, discover_in_text
+from profile_refinery_api.batch.ingest import IngestError, ingest, sanitize_filename, sniff_kind
 
 
 def minimal_pdf_with_text(text: str) -> bytes:

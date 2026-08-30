@@ -3,7 +3,6 @@
 
   const form = document.querySelector("#extraction-form");
   const urlsInput = document.querySelector("#profile-urls");
-  const apiKeyInput = document.querySelector("#api-key");
   const liAtInput = document.querySelector("#li-at");
   const jsessionInput = document.querySelector("#jsessionid");
   const companionInput = document.querySelector("#companion-cookies");
@@ -161,14 +160,14 @@
   };
 
   document.querySelector("#download-json").addEventListener("click", () => {
-    if (latestResponse) download("tross-profiles.json", JSON.stringify(latestResponse, null, 2), "application/json");
+    if (latestResponse) download("profile-refinery-profiles.json", JSON.stringify(latestResponse, null, 2), "application/json");
   });
   document.querySelector("#download-csv").addEventListener("click", () => {
     if (!latestResponse) return;
     const rows = latestResponse.results.map(flatten);
     const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
     const csv = [headers.map(csvCell).join(","), ...rows.map((row) => headers.map((key) => csvCell(row[key])).join(","))].join("\r\n");
-    download("tross-profiles.csv", csv, "text/csv;charset=utf-8");
+    download("profile-refinery-profiles.csv", csv, "text/csv;charset=utf-8");
   });
 
   form.addEventListener("submit", async (event) => {
@@ -182,7 +181,6 @@
     }
     if (!form.reportValidity()) return;
 
-    const apiKey = apiKeyInput.value;
     const payload = JSON.stringify({
       urls,
       session: {
@@ -202,14 +200,12 @@
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-API-Key": apiKey,
           "X-Request-ID": crypto.randomUUID(),
         },
         cache: "no-store",
         credentials: "same-origin",
         body: payload,
       });
-      apiKeyInput.value = "";
       liAtInput.value = "";
       jsessionInput.value = "";
       companionInput.value = "";

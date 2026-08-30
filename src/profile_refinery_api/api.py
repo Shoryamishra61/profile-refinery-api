@@ -184,11 +184,12 @@ def build_router(runtime: Runtime) -> APIRouter:
     async def session_extraction(
         request: Request,
         body: SessionExtractionRequest,
-        x_api_key: str | None = Security(API_KEY_HEADER),
     ) -> Response:
         """Extract profiles with caller-supplied, request-scoped session material."""
 
-        caller = _authorized(x_api_key, runtime)
+        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+        peer = request.client.host if request.client else "unknown"
+        caller = f"request-scoped:{forwarded or peer}"
         retry_after = limiter.check(caller)
         if retry_after is not None:
             raise CallerRateLimited(retry_after)

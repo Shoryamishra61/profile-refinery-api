@@ -2,7 +2,7 @@
 
 Engineering risk memo, not legal advice.
 
-LinkedIn profile data is identifiable personal data. LinkedIn's current contractual terms, as recorded in the supplied primary-source research, restrict scraping/copying profiles and bypassing access controls. The Tross challenge nevertheless asks for reverse engineering and direct endpoint calls. This repository states that tension and does not claim LinkedIn approval.
+LinkedIn profile data is identifiable personal data. LinkedIn's current contractual terms, as recorded in the supplied primary-source research, restrict scraping/copying profiles and bypassing access controls. The Profile Refinery challenge nevertheless asks for reverse engineering and direct endpoint calls. This repository states that tension and does not claim LinkedIn approval.
 
 Risk reduction in the implementation:
 

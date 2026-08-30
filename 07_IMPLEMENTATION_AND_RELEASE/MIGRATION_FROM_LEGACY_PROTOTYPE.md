@@ -12,7 +12,7 @@ URL canonicalization idea, entity assembler patterns, normalization helpers, Pro
 - circular benchmark -> independent expected outputs;
 - missing fixtures -> checked-in synthetic/redacted fixtures;
 - fail-open schema -> strict startup;
-- optional API key -> required;
+- optional operator API key retained only for backend-session and batch routes;
 - fabricated mock email -> remove;
 - `/workspace/*` path hacks -> package-relative config/resources;
 - aspirational README -> generated from actual final repo behavior.

@@ -6,7 +6,7 @@
 - [ ] pyproject/locked dependencies
 - [ ] env example + gitignore + secret scan
 - [ ] strict schema startup
-- [ ] require API key
+- [x] keep product-key-free request-scoped extraction; protect operator routes
 - [ ] remove fabricated email mock
 - [ ] independent fixtures/expected outputs
 - [ ] operation registry

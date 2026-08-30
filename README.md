@@ -1,15 +1,15 @@
-# Tross LinkedIn Profile API
+# Profile Refinery
 
-Tross accepts a LinkedIn member URL and attempts to return a normalized profile
+Profile Refinery accepts a LinkedIn member URL and attempts to return a normalized profile
 using authenticated direct HTTP requests. It uses no browser automation and has
 no fixture or replay fallback in `APP_MODE=live`.
 
-- API: <https://tross-linkedin-profile-api.vercel.app>
-- Repository: <https://github.com/Shoryamishra61/tross-linkedin-profile-api>
+- API: <https://profile-refinery-api.vercel.app>
+- Repository: <https://github.com/Shoryamishra61/profile-refinery-api>
 
 ## Problem and design boundary
 
-The assignment requires semantic profile data, not rendered page markup. Tross
+The assignment requires semantic profile data, not rendered page markup. Profile Refinery
 therefore sends bounded requests to registered LinkedIn operations, decodes
 Rest.li JSON or React Flight records, establishes target ownership, and validates
 the normalized result before returning it. Direct HTTP keeps the acquisition
@@ -113,12 +113,11 @@ values live only in the request's isolated runtime: they are not written to the
 job store, logged, cached, returned, or retained after the transport closes.
 The response carries `Cache-Control: no-store`, and the page clears all secret
 inputs immediately after submission. This is an alternative to configuring a
-shared LinkedIn session in the backend; `X-API-Key` still protects the Tross
-deployment.
+shared LinkedIn session in the backend. No Profile Refinery account or product
+API key is required for this request-scoped route.
 
 ```text
 POST /v1/session-extractions
-X-API-Key: <Tross caller key>
 
 {
   "urls": ["https://www.linkedin.com/in/example/"],
@@ -140,11 +139,12 @@ Fields outside the current direct-HTTP contract—such as professional email,
 company industry, follower counts, and connection degree—remain unavailable
 rather than being inferred.
 
-The original server-configured single-profile endpoint remains available:
+The operator-only server-configured single-profile endpoint remains available
+for existing integrations and retains its generic `X-API-Key` protection:
 
 ```bash
 curl -H "X-API-Key: $KEY" \
-  "https://tross-linkedin-profile-api.vercel.app/v1/profiles?url=https://www.linkedin.com/in/example/"
+  "https://profile-refinery-api.vercel.app/v1/profiles?url=https://www.linkedin.com/in/example/"
 ```
 
 The following is an illustrative **schema shape**, not a live-success example:
@@ -221,8 +221,9 @@ successful normalized live profile. A configured cookie alone is not readiness.
 
 ## Authentication
 
-Set `APP_API_KEYS` for API callers. Live extraction additionally requires session
-material for an account the operator owns:
+`APP_API_KEYS` is optional and applies only to protected operator/batch routes.
+The public request-scoped desk does not use it. Backend-session extraction
+additionally requires session material for an account the operator owns:
 
 ```text
 LINKEDIN_LI_AT=<li_at value>
@@ -236,7 +237,7 @@ LINKEDIN_ACCEPT_LANGUAGE=<language header associated with that session>
 Cookie values, CSRF values, and API keys must never be logged, committed, or
 included in comparison reports. Live mode fails closed when session material or
 semantic identity is unavailable. `LINKEDIN_EGRESS_PROXY` is optional and is
-passed to HTTPX as one operator-managed endpoint; Tross does not rotate proxies.
+passed to HTTPX as one operator-managed endpoint; Profile Refinery does not rotate proxies.
 When it is absent, HTTPX may use the standard `HTTPS_PROXY`/`ALL_PROXY`
 environment configuration. The transport enables HTTP/2 and never follows
 redirects automatically.
@@ -251,7 +252,7 @@ deployment secrets.
 ```bash
 uv sync --extra dev
 cp .env.example .env
-uv run uvicorn tross_linkedin_api.main:app --host 127.0.0.1 --port 8000
+uv run uvicorn profile_refinery_api.main:app --host 127.0.0.1 --port 8000
 ```
 
 Populate only the owned-session and caller-key values needed for the run. With
@@ -280,7 +281,7 @@ cannot be served stale, from replay, or from a fixture.
 uv sync --extra dev
 uv run pytest
 uv run ruff check src tests config scripts
-uv run mypy src/tross_linkedin_api
+uv run mypy src/profile_refinery_api
 uv run python scripts/security_audit.py
 uv run pip-audit
 ```

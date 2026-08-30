@@ -2,7 +2,7 @@
 
 Engineering risk memo, not legal advice.
 
-LinkedIn's current User Agreement prohibits scraping/copying profiles and bypassing access controls/use limits. Tross nevertheless explicitly asks candidates to reverse engineer and directly call LinkedIn endpoints. State this tension honestly; do not claim LinkedIn approval/compliance.
+LinkedIn's current User Agreement prohibits scraping/copying profiles and bypassing access controls/use limits. Profile Refinery nevertheless explicitly asks candidates to reverse engineer and directly call LinkedIn endpoints. State this tension honestly; do not claim LinkedIn approval/compliance.
 
 Profile data is identifiable personal data. Engineering mitigations: own/consented validation profiles, no email enrichment, minimize fields to assignment scope, no persistent profile DB by default, no raw payload logs, timestamps/provenance.
 

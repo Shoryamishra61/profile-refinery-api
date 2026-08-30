@@ -1,6 +1,6 @@
 # Judge Strategy
 
-Tross's clarification strongly suggests they are testing protocol archaeology + backend/system design + data modeling + robustness to unstable upstream contracts + repository discipline.
+Profile Refinery's clarification strongly suggests they are testing protocol archaeology + backend/system design + data modeling + robustness to unstable upstream contracts + repository discipline.
 
 ## Story
 

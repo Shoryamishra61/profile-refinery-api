@@ -2,7 +2,7 @@
 
 ## Established
 
-- Tross explicitly requires direct endpoint runtime and no browser.
+- Profile Refinery explicitly requires direct endpoint runtime and no browser.
 - Official LinkedIn APIs do not provide unrestricted arbitrary rich-profile URL lookup for this task.
 - LinkedIn Engineering documents Rest.li, pre-registered GraphQL, multi-service Profile architecture, and GraphQL-powered rearchitected Profile framework.
 - PhantomBuster's current Profile Scraper is the relevant prior art; Profile Visitor is browser-visit oriented and architecturally disallowed here.

@@ -22,12 +22,12 @@ import httpx
 import pytest
 from conftest import FULL_PROFILE_FIXTURE
 
-from tross_linkedin_api.config import Settings
-from tross_linkedin_api.errors import UpstreamChallenge, UpstreamRateLimited, UpstreamTimeout
-from tross_linkedin_api.governor import BreakerState
-from tross_linkedin_api.main import create_app
-from tross_linkedin_api.models import OperationResult
-from tross_linkedin_api.runtime import Runtime
+from profile_refinery_api.config import Settings
+from profile_refinery_api.errors import UpstreamChallenge, UpstreamRateLimited, UpstreamTimeout
+from profile_refinery_api.governor import BreakerState
+from profile_refinery_api.main import create_app
+from profile_refinery_api.models import OperationResult
+from profile_refinery_api.runtime import Runtime
 
 
 class FakeUpstream:
@@ -339,7 +339,7 @@ async def test_challenge_breaker_recovery_keeps_session_configured(tmp_path: Any
 def test_circuit_breaker_single_probe_is_structural() -> None:
     """Deterministic proof: exactly one probe per cooldown, no matter how many
     callers ask, and a failed probe re-opens."""
-    from tross_linkedin_api.governor import BreakerState, CircuitBreaker
+    from profile_refinery_api.governor import BreakerState, CircuitBreaker
 
     breaker = CircuitBreaker(failure_threshold=2, cooldown_seconds=60.0)
     breaker.record_failure()

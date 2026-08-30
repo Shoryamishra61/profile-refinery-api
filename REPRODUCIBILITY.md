@@ -7,16 +7,16 @@
 ## Clean-room procedure
 
 ```bash
-git clone https://github.com/Shoryamishra61/tross-linkedin-profile-api.git clean-room
+git clone https://github.com/Shoryamishra61/profile-refinery-api.git clean-room
 cd clean-room
 uv sync --extra dev --locked --python 3.12
 uv run ruff check src tests scripts
 uv run mypy
 uv run pytest
 uv run python scripts/security_audit.py
-uv run tross-benchmark --json --iterations 10
+uv run profile-refinery-benchmark --json --iterations 10
 uv run pip-audit
-docker build -t tross-linkedin-profile-api:local .
+docker build -t profile-refinery-api:local .
 ```
 
 Local API:
@@ -24,7 +24,7 @@ Local API:
 ```bash
 export APP_API_KEYS=replace-with-a-new-random-key
 export APP_MODE=fixture
-uv run uvicorn tross_linkedin_api.main:app --host 127.0.0.1 --port 8000
+uv run uvicorn profile_refinery_api.main:app --host 127.0.0.1 --port 8000
 ```
 
 Then check `/healthz`, `/readyz`, `/openapi.json`, missing/invalid auth, invalid URL, and an authenticated synthetic profile call. Fixture output is deterministic except observation time and measured local durations.

@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 def create_app(settings: Settings | None = None, runtime: Runtime | None = None) -> FastAPI:
-    active_runtime = runtime or Runtime(settings or Settings())  # type: ignore[call-arg]
+    active_runtime = runtime or Runtime(settings or Settings())
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -29,7 +29,7 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
         await active_runtime.aclose()
 
     application = FastAPI(
-        title="Tross LinkedIn Profile API",
+        title="Profile Refinery API",
         summary="Registry-driven direct HTTP profile normalization research API",
         version=__version__,
         openapi_version="3.1.0",
@@ -40,14 +40,14 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
 
     @application.middleware("http")
     async def assign_request_id(request: Request, call_next: Any) -> Any:
-        request.state.tross_request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.profile_refinery_request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         return await call_next(request)
 
     @application.exception_handler(ProblemError)
     async def handle_problem(request: Request, exc: ProblemError) -> JSONResponse:
         response = problem_response(request, exc)
         # Correlation: every problem response carries the caller-visible request id.
-        request_id = getattr(request.state, "tross_request_id", None)
+        request_id = getattr(request.state, "profile_refinery_request_id", None)
         if request_id:
             body = json.loads(bytes(response.body))
             body["request_id"] = request_id
@@ -74,7 +74,7 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
             }
             for error in exc.errors()
         ]
-        request_id = getattr(request.state, "tross_request_id", None)
+        request_id = getattr(request.state, "profile_refinery_request_id", None)
         return JSONResponse(
             {
                 "code": "REQUEST_VALIDATION_ERROR",
@@ -90,7 +90,7 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
 
     @application.exception_handler(ValueError)
     async def handle_contract_failure(request: Request, exc: ValueError) -> JSONResponse:
-        logging.getLogger("tross_linkedin_api").error(
+        logging.getLogger("profile_refinery_api").error(
             "internal_contract_failure path=%s exception_type=%s",
             request.url.path,
             type(exc).__name__,
@@ -99,7 +99,7 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
 
     @application.exception_handler(Exception)
     async def handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
-        logging.getLogger("tross_linkedin_api").exception(
+        logging.getLogger("profile_refinery_api").exception(
             "unexpected_failure path=%s exception_type=%s",
             request.url.path,
             type(exc).__name__,

@@ -18,7 +18,9 @@ Structured allowlist: request_id, semantic operation, duration, status class, pa
 
 ## Caller auth
 
-API key required. Missing/invalid -> 401.
+The request-scoped extraction desk is public and connection-rate-limited; it
+does not expose a backend session. Legacy operator and batch routes retain a
+generic API key, where missing/invalid credentials return 401.
 
 ## Upstream JSON
 

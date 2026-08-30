@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tross-linkedin-api"
+name = "profile-refinery-linkedin-api"
 version = "1.0.0"
 description = "Browserless, registry-driven LinkedIn profile API research implementation"
 readme = "README.md"
@@ -41,10 +41,10 @@ dev = [
 [project.scripts]
 
 [tool.vercel]
-entrypoint = "src.tross_linkedin_api.main:app"
+entrypoint = "src.profile_refinery_api.main:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tross_linkedin_api"]
+packages = ["src/profile_refinery_api"]
 
 [tool.pytest.ini_options]
 addopts = "-q --strict-markers --strict-config"
@@ -63,7 +63,7 @@ ignore = ["E501", "S101"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src/tross_linkedin_api"]
+files = ["src/profile_refinery_api"]
 exclude = ["11_ARCHIVE_ORIGINALS"]
 
 [[tool.mypy.overrides]]

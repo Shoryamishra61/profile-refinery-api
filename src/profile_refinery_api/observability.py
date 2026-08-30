@@ -4,7 +4,7 @@ import json
 import logging
 from dataclasses import asdict, dataclass
 
-logger = logging.getLogger("tross_linkedin_api")
+logger = logging.getLogger("profile_refinery_api")
 
 
 @dataclass(frozen=True, slots=True)

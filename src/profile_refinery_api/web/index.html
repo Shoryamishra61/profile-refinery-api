@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Turn LinkedIn profile URLs into a structured, provenance-rich dataset with your own request-scoped session.">
-  <title>Tross Profile Refinery</title>
+  <title>Profile Refinery</title>
   <link rel="stylesheet" href="/assets/app.css">
   <script src="/assets/app.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#extractor">Skip to extractor</a>
   <header class="masthead">
-    <a class="wordmark" href="/" aria-label="Tross home">
-      <span class="wordmark-mark" aria-hidden="true">T</span>
-      <span>TROSS / PROFILE REFINERY</span>
+    <a class="wordmark" href="/" aria-label="Profile Refinery home">
+      <span class="wordmark-mark" aria-hidden="true">P</span>
+      <span>PROFILE REFINERY</span>
     </a>
     <nav aria-label="Utility links">
       <a href="/docs">API docs</a>
@@ -69,13 +69,9 @@
               <p class="field-help">One public profile URL per line. Up to 10 profiles, processed sequentially.</p>
             </div>
 
-            <div class="field-block">
-              <label for="api-key">Tross API key</label>
-              <div class="secret-control">
-                <input id="api-key" type="password" autocomplete="off" required placeholder="Required to call this deployment">
-                <button class="reveal" type="button" data-reveal="api-key" aria-label="Show Tross API key">SHOW</button>
-              </div>
-              <p class="field-help">Authorizes this API call. It is not your LinkedIn password.</p>
+            <div class="no-account-note">
+              <span aria-hidden="true">✓</span>
+              <p><strong>No product key or account required.</strong><br>Bring only an authorized LinkedIn session and the profile URLs you want to process.</p>
             </div>
           </div>
 
@@ -181,7 +177,7 @@
   </main>
 
   <footer>
-    <span>TROSS / EVIDENCE-FIRST PROFILE DATA</span>
+    <span>PROFILE REFINERY / EVIDENCE-FIRST PROFILE DATA</span>
     <span>Use only with an authorized account and lawful purpose.</span>
   </footer>
 </body>

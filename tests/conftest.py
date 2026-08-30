@@ -11,11 +11,11 @@ import pytest
 
 os.environ.setdefault("APP_API_KEYS", "test-api-key")
 
-from tross_linkedin_api.config import Settings  # noqa: E402
-from tross_linkedin_api.errors import ProblemError, UpstreamOperationDrift  # noqa: E402
-from tross_linkedin_api.main import create_app  # noqa: E402
-from tross_linkedin_api.models import OperationResult  # noqa: E402
-from tross_linkedin_api.runtime import Runtime  # noqa: E402
+from profile_refinery_api.config import Settings  # noqa: E402
+from profile_refinery_api.errors import ProblemError, UpstreamOperationDrift  # noqa: E402
+from profile_refinery_api.main import create_app  # noqa: E402
+from profile_refinery_api.models import OperationResult  # noqa: E402
+from profile_refinery_api.runtime import Runtime  # noqa: E402
 
 FULL_PROFILE_FIXTURE = json.loads(
     (Path(__file__).parent / "fixtures" / "raw" / "full_profile.json").read_text(encoding="utf-8")
@@ -80,7 +80,7 @@ def settings() -> Settings:
         # High breaker threshold: request-mapping tests assert error typing,
         # not breaker transitions (those have dedicated tests).
         app_breaker_failure_threshold=50,
-        app_store_dir="./.tross_store_test",
+        app_store_dir="./.profile_refinery_store_test",
     )
 
 

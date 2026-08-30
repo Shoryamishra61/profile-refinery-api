@@ -14,7 +14,7 @@ class ProblemError(Exception):
 
     def as_dict(self, instance: str) -> dict[str, Any]:
         body: dict[str, Any] = {
-            "type": f"https://tross.dev/problems/{self.code.lower().replace('_', '-')}",
+            "type": f"urn:profile-refinery:problem:{self.code.lower().replace('_', '-')}",
             "title": self.title,
             "status": self.status,
             "detail": self.detail,

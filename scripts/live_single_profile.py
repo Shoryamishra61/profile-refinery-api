@@ -9,9 +9,9 @@ from pathlib import Path
 
 from pydantic import SecretStr
 
-from tross_linkedin_api.canonicalizer import canonicalize_profile_url
-from tross_linkedin_api.config import Settings
-from tross_linkedin_api.runtime import Runtime
+from profile_refinery_api.canonicalizer import canonicalize_profile_url
+from profile_refinery_api.config import Settings
+from profile_refinery_api.runtime import Runtime
 
 
 async def run(env_file: Path, profile_url: str) -> None:

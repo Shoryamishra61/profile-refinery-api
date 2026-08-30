@@ -2,7 +2,7 @@
 
 When materials disagree, use this order:
 
-1. Tross challenge + no-browser clarification
+1. Profile Refinery challenge + no-browser clarification
 2. current controlled live observation
 3. current official LinkedIn docs / LinkedIn Engineering
 4. standards/security specs

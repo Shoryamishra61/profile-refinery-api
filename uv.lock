@@ -1396,7 +1396,7 @@ wheels = [
 ]
 
 [[package]]
-name = "tross-linkedin-api"
+name = "profile-refinery-linkedin-api"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [

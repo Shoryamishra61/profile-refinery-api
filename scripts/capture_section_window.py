@@ -13,22 +13,22 @@ import os
 import sys
 from pathlib import Path
 
-LI_AT = os.environ["TROSS_LI_AT"]
-JSESSIONID = os.environ["TROSS_JSESSIONID"]
-MEMBER_ID = os.environ.get("TROSS_MEMBER_ID", "ACoAAA8BYqEBCGLg_vT_ca6mMEqkpp9nVffJ3hc")
-OUT = Path(os.environ.get("TROSS_OUT", "C:/tmp/card_experience_live.json"))
+LI_AT = os.environ["PROFILE_REFINERY_LI_AT"]
+JSESSIONID = os.environ["PROFILE_REFINERY_JSESSIONID"]
+MEMBER_ID = os.environ.get("PROFILE_REFINERY_MEMBER_ID", "ACoAAA8BYqEBCGLg_vT_ca6mMEqkpp9nVffJ3hc")
+OUT = Path(os.environ.get("PROFILE_REFINERY_OUT", "C:/tmp/card_experience_live.json"))
 
 
 async def main() -> None:
     os.environ.setdefault("APP_API_KEYS", "capture")
 
-    from tross_linkedin_api.config import Settings
-    from tross_linkedin_api.errors import ProblemError
-    from tross_linkedin_api.graph import NormalizedGraph
-    from tross_linkedin_api.operation_registry import OperationRegistry
-    from tross_linkedin_api.parsers import parse_experience
-    from tross_linkedin_api.session import SessionProvider
-    from tross_linkedin_api.transport import LinkedInTransport
+    from profile_refinery_api.config import Settings
+    from profile_refinery_api.errors import ProblemError
+    from profile_refinery_api.graph import NormalizedGraph
+    from profile_refinery_api.operation_registry import OperationRegistry
+    from profile_refinery_api.parsers import parse_experience
+    from profile_refinery_api.session import SessionProvider
+    from profile_refinery_api.transport import LinkedInTransport
 
     settings = Settings(
         app_api_keys=["capture"], app_mode="live",

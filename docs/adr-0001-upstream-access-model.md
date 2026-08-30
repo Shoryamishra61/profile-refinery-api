@@ -4,7 +4,7 @@
 A single personal LinkedIn session was simultaneously the authentication mechanism,
 throughput ceiling, rate-limit domain and failure domain: ~20 rapid probes pushed the
 upstream into a challenge state and the whole extraction capability went down with it.
-Tross requires direct HTTP endpoint access with the candidate's own legitimate session;
+Profile Refinery requires direct HTTP endpoint access with the candidate's own legitimate session;
 browser automation and safeguard evasion are out of scope.
 
 ## Decision

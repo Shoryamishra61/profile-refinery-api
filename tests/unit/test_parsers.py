@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from tross_linkedin_api.errors import UpstreamOperationDrift
-from tross_linkedin_api.graph import NormalizedGraph
-from tross_linkedin_api.parsers import (
+from profile_refinery_api.errors import UpstreamOperationDrift
+from profile_refinery_api.graph import NormalizedGraph
+from profile_refinery_api.parsers import (
     parse_certifications,
     parse_core_payload,
     parse_education,
@@ -150,7 +150,7 @@ def test_legacy_localized_fixture_shapes_still_parse() -> None:
 
 def test_core_parses_legacy_core_fixture() -> None:
     graph = NormalizedGraph(load("profile_core"))
-    from tross_linkedin_api.parsers import parse_core
+    from profile_refinery_api.parsers import parse_core
 
     core = parse_core(graph)
     assert core["name"] == "Avery Raman"

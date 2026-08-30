@@ -3,11 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
-from tross_linkedin_api.config import Settings
-from tross_linkedin_api.operation_registry import OperationRegistry
-from tross_linkedin_api.validation import SchemaValidator
+from profile_refinery_api.config import Settings
+from profile_refinery_api.operation_registry import OperationRegistry
+from profile_refinery_api.validation import SchemaValidator
 
 REGISTRY = Path("config/operation_registry.yaml")
 
@@ -18,9 +17,9 @@ def test_live_settings_can_start_without_session_secrets() -> None:
     assert settings.linkedin_jsessionid is None
 
 
-def test_api_keys_are_required() -> None:
-    with pytest.raises(ValidationError):
-        Settings(app_api_keys=[])
+def test_api_keys_are_optional_for_public_extraction_desk() -> None:
+    settings = Settings(app_api_keys=[])
+    assert settings.api_key_values == ()
 
 
 def test_schema_missing_fails_closed(tmp_path: Path) -> None:

@@ -2,9 +2,9 @@
 
 ## Mission
 
-Build the Tross browserless LinkedIn Profile API: URL in -> direct LinkedIn endpoint calls -> normalized JSON out -> public HTTPS.
+Build the Profile Refinery browserless LinkedIn Profile API: URL in -> direct LinkedIn endpoint calls -> normalized JSON out -> public HTTPS.
 
-## Hard Tross pivot
+## Hard Profile Refinery pivot
 
 Runtime browser use is prohibited. Never add Selenium, Playwright, Puppeteer, Chromium, browser workers, DOM acquisition, screenshots, or browser fallback.
 

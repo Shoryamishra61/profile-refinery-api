@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from tross_linkedin_api.graph import (
+from profile_refinery_api.graph import (
     AmbiguousTargetProfile,
     NormalizedGraph,
     TargetProfileMissing,
@@ -245,7 +245,7 @@ def test_cycles_in_references_terminate() -> None:
 
 
 def test_attributed_and_localized_text_shapes() -> None:
-    from tross_linkedin_api.parsers import _localized
+    from profile_refinery_api.parsers import _localized
 
     assert _localized("plain") == "plain"
     assert _localized({"text": "attributed"}) == "attributed"

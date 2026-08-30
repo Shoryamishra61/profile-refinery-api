@@ -29,7 +29,9 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    app_api_keys: ApiKeys = Field(min_length=1)
+    # Optional keys protect operator-only endpoints. The public request-scoped
+    # extraction desk does not invent or require a product-specific API key.
+    app_api_keys: ApiKeys = Field(default_factory=list)
     # Optional additive key used for controlled deployment verification and
     # rotation without invalidating existing callers.
     app_validation_api_key: SecretStr | None = None
@@ -51,7 +53,7 @@ class Settings(BaseSettings):
     app_breaker_failure_threshold: int = Field(default=3, ge=1, le=200)
     app_breaker_cooldown_seconds: float = Field(default=300.0, gt=0, le=3600)
     # Durable job journal directory (survives warm process restarts).
-    app_store_dir: Path = Path("./.tross_store")
+    app_store_dir: Path = Path("./.profile_refinery_store")
     app_batch_max_urls: int = Field(default=200, ge=1, le=5_000)
     app_batch_max_file_bytes: int = Field(default=5_242_880, ge=1024, le=52_428_800)
     app_batch_concurrency: int = Field(default=3, ge=1, le=10)

@@ -25,5 +25,5 @@ profile_view HTTP 200
 ```
 
 No current production request has returned genuine normalized live profile JSON.
-The live Tross requirement therefore remains blocked by upstream behavior, while
+The live Profile Refinery requirement therefore remains blocked by upstream behavior, while
 the implementation and offline submission package are complete.

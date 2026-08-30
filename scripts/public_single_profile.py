@@ -14,7 +14,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-file", type=Path, required=True)
     parser.add_argument("--url", required=True)
-    parser.add_argument("--base", default="https://tross-linkedin-profile-api.vercel.app")
+    parser.add_argument("--base", default="https://profile-refinery-api.vercel.app")
     args = parser.parse_args()
     keys = dotenv_values(args.env_file).get("APP_API_KEYS")
     if not keys:

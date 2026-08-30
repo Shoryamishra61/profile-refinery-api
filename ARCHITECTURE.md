@@ -6,7 +6,7 @@ Decision records: `docs/adr-0001` … `docs/adr-0006`.
 
 ## 1. Requirements
 
-**Tross (original)**
+**Core assignment**
 * Public HTTPS API accepting a LinkedIn profile URL, returning the profile's
   structured data (name, headline, location, about, experience, education,
   skills, certifications, languages, images).
@@ -179,7 +179,7 @@ limitation with a named upgrade path (managed KV behind `JournalStore`).
 
 ## 10. Observability
 
-* `GET /metrics` — Prometheus text: `tross_linkedin_operations_total`, breaker
+* `GET /metrics` — Prometheus text: `profile_refinery_linkedin_operations_total`, breaker
   state, queue depth/age, jobs by outcome, retries, batches, coalesced jobs.
 * `GET /readyz` — success-required readiness plus `extraction_capability`
   (`CLOSED`, `OPEN`, `HALF_OPEN`, `UNAVAILABLE`, `UNVERIFIED`, `UNUSABLE`).
@@ -201,7 +201,7 @@ limitation with a named upgrade path (managed KV behind `JournalStore`).
 
 ## 11b. Field coverage matrix
 
-Every Tross-required field, its source operation, and verification status:
+Every required field, its source operation, and verification status:
 
 | Field | Source | Raw path (dash) | Status |
 |---|---|---|---|

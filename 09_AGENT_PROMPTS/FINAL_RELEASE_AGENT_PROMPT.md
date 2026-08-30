@@ -1,6 +1,6 @@
 # Final Release Agent Prompt
 
-Act as release engineer + Tross evaluator. Do not add features.
+Act as release engineer + Profile Refinery evaluator. Do not add features.
 
 From clean clone: install; lint/type/test; fixture benchmark; verify independent ground truth; no-browser dependency scan; secret scan; start fixture/live modes; run controlled live benchmark; deploy; call public HTTPS endpoint; reproduce README exactly.
 

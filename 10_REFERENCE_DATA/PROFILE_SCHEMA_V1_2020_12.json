@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/schemas/tross-linkedin-profile-v1.json",
-  "title": "TrossLinkedInProfileResponse",
+  "$id": "https://example.invalid/schemas/profile-refinery-linkedin-profile-v1.json",
+  "title": "Profile RefineryLinkedInProfileResponse",
   "type": "object",
   "required": [
     "schema_version",

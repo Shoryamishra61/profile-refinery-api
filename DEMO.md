@@ -7,7 +7,7 @@ PowerShell:
 ```powershell
 $env:APP_API_KEYS = "local-demo-key-change-me"
 $env:APP_MODE = "fixture"
-uv run uvicorn tross_linkedin_api.main:app --host 127.0.0.1 --port 8000
+uv run uvicorn profile_refinery_api.main:app --host 127.0.0.1 --port 8000
 ```
 
 In a second terminal:
@@ -36,7 +36,7 @@ Then run:
 
 ```bash
 uv run python scripts/security_audit.py
-uv run tross-benchmark --json --iterations 10
+uv run profile-refinery-benchmark --json --iterations 10
 ```
 
 Explain that all metrics are fixture-only. A live/public demo must not be presented until `JUDGE_AUDIT.md` live and deployment gates change from BLOCKED to PASS with executable evidence.

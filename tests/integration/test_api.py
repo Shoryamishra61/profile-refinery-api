@@ -4,14 +4,14 @@ import httpx
 import pytest
 from conftest import FULL_PROFILE_FIXTURE
 
-import tross_linkedin_api.api as api_module
-from tross_linkedin_api.errors import (
+import profile_refinery_api.api as api_module
+from profile_refinery_api.errors import (
     ProfileNotFound,
     UpstreamChallenge,
     UpstreamOperationDrift,
     UpstreamTimeout,
 )
-from tross_linkedin_api.runtime import Runtime as RealRuntime
+from profile_refinery_api.runtime import Runtime as RealRuntime
 
 REQUEST_LI_AT_SENTINEL = "request-only-" + "li-at-sentinel-value"
 REQUEST_JSESSION_SENTINEL = "ajax:" + "request-only-jsession"
@@ -237,7 +237,7 @@ async def test_openapi_documents_security(client: httpx.AsyncClient) -> None:
     assert any(item.get("name") == "X-API-Key" for item in schemes.values())
     assert "/v1/batches" in document["paths"]
     assert "/v1/batches/{batch_id}/export" in document["paths"]
-    assert document["paths"]["/v1/session-extractions"]["post"]["security"]
+    assert "security" not in document["paths"]["/v1/session-extractions"]["post"]
 
 
 @pytest.mark.asyncio
@@ -246,7 +246,9 @@ async def test_extraction_desk_and_assets_are_public(client: httpx.AsyncClient) 
     stylesheet = await client.get("/assets/app.css")
     script = await client.get("/assets/app.js")
     assert page.status_code == 200
-    assert "Tross Profile Refinery" in page.text
+    assert "<title>Profile Refinery</title>" in page.text
+    assert "No product key or account required." in page.text
+    assert "api-key" not in page.text.casefold()
     assert "Request memory only" in page.text
     assert "localStorage" not in script.text
     assert stylesheet.status_code == 200
@@ -271,7 +273,7 @@ async def test_request_scoped_session_extracts_without_echoing_secrets(
     sentinel_companions = "bcookie=request-only-bcookie; liap=true"
     response = await client.post(
         "/v1/session-extractions",
-        headers={"X-API-Key": "test-api-key", "X-Request-ID": "desk-run"},
+        headers={"X-Request-ID": "desk-run"},
         json={
             "urls": ["https://www.linkedin.com/in/test-integration-profile/"],
             "session": {
@@ -310,7 +312,6 @@ async def test_request_scoped_extraction_stops_after_challenge(
     )
     response = await client.post(
         "/v1/session-extractions",
-        headers={"X-API-Key": "test-api-key"},
         json={
             "urls": [
                 "https://www.linkedin.com/in/first-profile/",
@@ -332,9 +333,16 @@ async def test_request_scoped_extraction_stops_after_challenge(
 
 
 @pytest.mark.asyncio
-async def test_request_scoped_extraction_requires_tross_api_key(
+async def test_request_scoped_extraction_is_public(
     client: httpx.AsyncClient,
+    stub_transport: object,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        api_module,
+        "Runtime",
+        lambda settings: RealRuntime(settings, transport=stub_transport),
+    )
     response = await client.post(
         "/v1/session-extractions",
         json={
@@ -346,8 +354,8 @@ async def test_request_scoped_extraction_requires_tross_api_key(
             },
         },
     )
-    assert response.status_code == 401
-    assert response.json()["code"] == "UNAUTHORIZED_CALLER"
+    assert response.status_code == 200
+    assert response.json()["results"][0]["status"] == "succeeded"
 
 
 @pytest.mark.asyncio
@@ -357,7 +365,6 @@ async def test_request_validation_never_echoes_rejected_session_secret(
     rejected_secret = "short-" + "secret-with-newline\nprivate-tail"
     response = await client.post(
         "/v1/session-extractions",
-        headers={"X-API-Key": "test-api-key"},
         json={
             "urls": ["https://www.linkedin.com/in/test-profile/"],
             "session": {

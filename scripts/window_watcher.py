@@ -9,8 +9,8 @@ import asyncio
 import os
 import sys
 
-LI_AT = os.environ["TROSS_LI_AT"]
-JSESSIONID = os.environ["TROSS_JSESSIONID"]
+LI_AT = os.environ["PROFILE_REFINERY_LI_AT"]
+JSESSIONID = os.environ["PROFILE_REFINERY_JSESSIONID"]
 KEY = "local-acceptance-key"
 BASE = "http://127.0.0.1:8907"
 MAX_CYCLES = int(os.environ.get("MAX_CYCLES", "60"))  # ~20h at 20-min cycles
@@ -20,9 +20,9 @@ ENV = {
     "LINKEDIN_JSESSIONID": JSESSIONID,
     "APP_API_KEYS": KEY,
     "APP_MODE": "live",
-    "APP_STORE_DIR": "./.tross_store_local",
-    "TROSS_API_KEY": KEY,
-    "TROSS_BASE": BASE,
+    "APP_STORE_DIR": "./.profile_refinery_store_local",
+    "PROFILE_REFINERY_API_KEY": KEY,
+    "PROFILE_REFINERY_BASE": BASE,
 }
 PY = sys.executable
 
@@ -30,7 +30,7 @@ PY = sys.executable
 async def probe_window() -> bool:
     """One profile request through the governed API. True if it succeeded."""
     server = await asyncio.create_subprocess_exec(
-        PY, "-m", "uvicorn", "tross_linkedin_api.main:app",
+        PY, "-m", "uvicorn", "profile_refinery_api.main:app",
         "--port", "8907", "--log-level", "warning", env=ENV,
     )
     try:

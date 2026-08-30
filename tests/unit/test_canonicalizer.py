@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from tross_linkedin_api.canonicalizer import canonicalize_profile_url
-from tross_linkedin_api.errors import InvalidProfileUrl
+from profile_refinery_api.canonicalizer import canonicalize_profile_url
+from profile_refinery_api.errors import InvalidProfileUrl
 
 
 @pytest.mark.parametrize(

@@ -35,7 +35,7 @@
 - Docker Desktop was initially stopped. After one controlled startup, image build and container health/profile smoke tests passed. Deployment-provider access remained unavailable.
 - Added architecture, API, method, results, limitations, security, privacy/platform, comparison, reproducibility, demo, logs, and adversarial audit documents.
 - Created logical Git milestones for package, implementation, tests, documentation, and clean-room evidence.
-- Published `https://github.com/Shoryamishra61/tross-linkedin-profile-api` as PUBLIC. The OAuth token lacked `workflow` scope, so the public fallback mirrors CI at `ci/github-actions-ci.yml.example`; local `main` retains the active `.github/workflows/ci.yml`.
+- Published `https://github.com/Shoryamishra61/profile-refinery-api` as PUBLIC. The OAuth token lacked `workflow` scope, so the public fallback mirrors CI at `ci/github-actions-ci.yml.example`; local `main` retains the active `.github/workflows/ci.yml`.
 
 ### Public research-documentation release
 
