@@ -20,15 +20,19 @@ fallbacks.
 
 ## Current production status
 
-Production is **not live-verified**. For request `final-p0-acceptance-2`, the
-authenticated RSC `profile_view` request reached LinkedIn and returned HTTP 200,
-but usable core parsing failed with `UPSTREAM_OPERATION_DRIFT`. The orchestrator
-then executed the registered authenticated `profile_page` fallback. LinkedIn
-returned HTTP 302, the transport classified `UPSTREAM_CHALLENGE`, and the circuit
-breaker opened. The API emitted no fixture, replay, or inferred profile data.
+Production is now **live-verified for one deployed profile request**. Request
+`deployed-live-20260830` returned HTTP 200 from the public HTTPS API with
+`retrieval.mode=live`, `fixture=false`, real identity, 5 Experience, 1 Education,
+3 Skills, 5 Certifications, 0 Languages, and a profile image. The primary
+`profile_view` and all required section operations succeeded; no page fallback,
+fixture, replay, or cache was used. `/readyz` returned 200 after that successful
+extraction. Sanitized evidence is stored in
+`artifacts/live_profile_A_deployed.json`.
 
-That trace proves the fallback fix in production. It does not prove that the
-current upstream session can return normalized live profile JSON.
+An earlier production trace (`final-p0-acceptance-2`) remains useful drift
+evidence: its identity-less RSC response correctly fell back to the authenticated
+profile page and stopped on a 302 challenge. The new success proves that this
+failure was not a fabricated profile or a permanent parser fallback.
 
 Evidence labels have these exact meanings:
 
@@ -250,9 +254,8 @@ from the full `pytest` run; it is not evidence of live LinkedIn extraction.
 
 ## Known limitations
 
-- The latest production core trace is not usable live evidence: the primary RSC
-  response lacked target identity and the authenticated page fallback received
-  a 302 challenge.
+- Public extraction depends on a short-lived owned LinkedIn session and upstream
+  behavior; a later challenge or schema change must still fail closed.
 - Certifications now has non-empty `LIVE` and `REAL_HAR_REPLAY` evidence.
   Languages was reached and parsed successfully but was empty on both live
   profiles and the real HAR; a non-empty real Languages case remains unverified.
@@ -260,6 +263,9 @@ from the full `pytest` run; it is not evidence of live LinkedIn extraction.
   options only. Neither has been verified to change LinkedIn's response.
 - Profile completeness is viewer- and upstream-contract-dependent. Legitimately
   absent data remains null or empty; unknown data is never inferred.
+- `/readyz` records observed success in process memory. On a serverless host, a
+  cold instance can conservatively return `UNVERIFIED` until that instance
+  completes a live profile request.
 
 ## Safety boundary
 
