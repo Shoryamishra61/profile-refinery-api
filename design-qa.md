@@ -28,6 +28,7 @@ Blocked for the same reason. Code-level checks confirm the intended avatar, iden
 - Pass 1: blocked before comparison; no implementation screenshot was available. No visual fixes are claimed from this pass.
 - Pass 2: blocked again after the full-detail/loading/error implementation; browser discovery returned no connected browser surfaces. Code-level overflow constraints were added so the desktop detail panel scrolls while mobile uses document flow, but pixel correctness remains unverified.
 - Pass 3: blocked after replacing the wide dark split card with a light 430px mobile-profile card. The scroll owner is now the middle card stage (`overflow-y: auto`, `touch-action: pan-y`) and the portrait has an explicit decoded-CDN image plus visible fallback, but no rendered screenshot was available for comparison.
+- Pass 4: the user's production screenshot proved the direct cross-origin `<img>` still fell back to the initial. Portrait delivery now uses a same-origin, no-cookie media endpoint restricted to HTTPS `media.licdn.com/dms/image/`, redirects disabled, supported image MIME types, and a 5 MB ceiling. The exact supplied image passed through locally as HTTP 200 `image/jpeg` with all 16,843 bytes intact. Rendered comparison remains blocked because browser discovery still returned no connected surfaces.
 
 ## Final result
 

@@ -135,6 +135,11 @@
     String(value || "").replaceAll("&amp;", "&").replaceAll("\\_", "_")
   );
 
+  const mediaProxyUrl = (value) => {
+    const source = normalizeMediaUrl(value);
+    return source ? `${location.origin}/v1/profile-media?url=${encodeURIComponent(source)}` : "";
+  };
+
   const formatObserved = (value) => {
     const date = new Date(value || "");
     return Number.isNaN(date.valueOf())
@@ -171,6 +176,7 @@
     const location = fieldValue(profile, "location", "Location not provided");
     const about = fieldValue(profile, "about", "About section not provided by the upstream profile.");
     const imageUrl = normalizeMediaUrl(fieldValue(profile, "profile_image", {})?.url);
+    const renderedImageUrl = mediaProxyUrl(imageUrl);
     const canonicalUrl = safeHttpsUrl(profile?.canonical_url);
     const experience = fieldValue(profile, "experience", []);
     const education = fieldValue(profile, "education", []);
@@ -271,7 +277,7 @@
     }));
     const avatar = `<div class="passport-avatar-shell">
       <div class="passport-avatar passport-avatar-fallback" aria-hidden="${imageUrl ? "true" : "false"}">${escapeHtml(initial)}</div>
-      ${imageUrl ? `<img class="passport-avatar" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)} profile photo" referrerpolicy="no-referrer" decoding="async">` : ""}
+      ${renderedImageUrl ? `<img class="passport-avatar" src="${escapeHtml(renderedImageUrl)}" alt="${escapeHtml(name)} profile photo" decoding="async">` : ""}
     </div>`;
 
     return `<article class="profile-passport" tabindex="0" aria-label="Profile card for ${escapeHtml(name)}">

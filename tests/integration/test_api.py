@@ -342,12 +342,72 @@ async def test_extraction_desk_and_assets_are_public(client: httpx.AsyncClient) 
     assert "validateProfileUrl" in script.text
     assert "startProgress" in script.text
     assert "normalizeMediaUrl" in script.text
+    assert "mediaProxyUrl" in script.text
+    assert "/v1/profile-media?url=" in script.text
     assert "passport-avatar-shell" in script.text
     assert "Open original image" in script.text
     assert "touch-action: pan-y" in stylesheet.text
     assert "https://*.licdn.com" in page.headers["content-security-policy"]
     assert stylesheet.status_code == 200
     assert script.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_profile_media_proxy_returns_allowlisted_image(
+    client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image_bytes = b"\xff\xd8\xffrequest-scoped-profile-photo"
+    requested: list[str] = []
+
+    class FakeResponse:
+        status_code = 200
+        content = image_bytes
+        headers = {"content-type": "image/jpeg"}
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs["follow_redirects"] is False
+
+        async def __aenter__(self) -> FakeAsyncClient:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def get(self, url: str, **kwargs: object) -> FakeResponse:
+            requested.append(url)
+            return FakeResponse()
+
+    monkeypatch.setattr(api_module.httpx, "AsyncClient", FakeAsyncClient)
+    source = "https://media.licdn.com/dms/image/profile-photo?e=1&t=signed"
+    response = await client.get("/v1/profile-media", params={"url": source})
+    assert response.status_code == 200
+    assert response.content == image_bytes
+    assert response.headers["content-type"] == "image/jpeg"
+    assert "s-maxage=86400" in response.headers["cache-control"]
+    assert requested == [source]
+
+
+@pytest.mark.asyncio
+async def test_profile_media_proxy_rejects_non_linkedin_host_without_fetch(
+    client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    class ForbiddenClient:
+        def __init__(self, **kwargs: object) -> None:
+            nonlocal called
+            called = True
+
+    monkeypatch.setattr(api_module.httpx, "AsyncClient", ForbiddenClient)
+    response = await client.get(
+        "/v1/profile-media",
+        params={"url": "https://example.com/dms/image/not-allowed"},
+    )
+    assert response.status_code == 400
+    assert called is False
 
 
 @pytest.mark.asyncio

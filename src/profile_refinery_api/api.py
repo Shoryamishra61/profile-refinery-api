@@ -5,8 +5,10 @@ import json
 import uuid
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Query, Request, Security, UploadFile
+import httpx
+from fastapi import APIRouter, HTTPException, Query, Request, Security, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 
@@ -92,6 +94,56 @@ def build_router(runtime: Runtime) -> APIRouter:
             WEB_ROOT.joinpath("app.js").read_text(encoding="utf-8"),
             media_type="text/javascript",
             headers={"Cache-Control": "public, max-age=300"},
+        )
+
+    @router.get("/v1/profile-media", include_in_schema=False)
+    async def profile_media(
+        url: Annotated[str, Query(min_length=1, max_length=4096)],
+    ) -> Response:
+        """Return a strictly allowlisted LinkedIn CDN image as same-origin media."""
+
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "media.licdn.com"
+            or parsed.port is not None
+            or parsed.username is not None
+            or parsed.password is not None
+            or not parsed.path.startswith("/dms/image/")
+            or parsed.fragment
+        ):
+            raise HTTPException(status_code=400, detail="Unsupported profile media URL.")
+
+        try:
+            async with httpx.AsyncClient(
+                follow_redirects=False,
+                timeout=httpx.Timeout(10.0, connect=5.0),
+            ) as client:
+                upstream = await client.get(
+                    url,
+                    headers={
+                        "Accept": "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8",
+                        "User-Agent": "Profile-Refinery-Media/1.0",
+                    },
+                )
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail="Profile image is unavailable.") from exc
+
+        if upstream.status_code != 200:
+            raise HTTPException(status_code=502, detail="Profile image is unavailable.")
+        media_type = upstream.headers.get("content-type", "").split(";", 1)[0].lower()
+        if media_type not in {"image/jpeg", "image/png", "image/webp", "image/avif"}:
+            raise HTTPException(status_code=502, detail="Profile media returned a non-image response.")
+        if not upstream.content or len(upstream.content) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=502, detail="Profile image size is invalid.")
+        return Response(
+            content=upstream.content,
+            media_type=media_type,
+            headers={
+                "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400",
+                "Content-Disposition": "inline",
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     @router.get("/healthz", tags=["operations"])
