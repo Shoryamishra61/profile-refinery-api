@@ -206,6 +206,33 @@ class ProfileOrchestrator:
                 )
                 dedicated_observed.add(returned_name)
 
+        # The verified Activity component owns identity, headline, and photo,
+        # but captured streams do not carry profile location. Modern profile
+        # page rehydration does. Enrich only the missing field, after section
+        # retrieval, so a challenged optional page request cannot discard the
+        # profile data already obtained from direct RSC operations.
+        if (
+            not core.get("location")
+            and strategy != FALLBACK_OPERATION
+            and FALLBACK_OPERATION in self._registry.enabled_names()
+            and FALLBACK_OPERATION not in attempted
+        ):
+            attempted.append(FALLBACK_OPERATION)
+            try:
+                page_result = await self._execute(
+                    FALLBACK_OPERATION, canonical.slug, request_id
+                )
+                page_parsed = parse_core_payload(page_result.payload, canonical.slug)
+                page_location = page_parsed["core"].get("location")
+                if page_location:
+                    core["location"] = page_location
+                    core.setdefault("_field_sources", {})["location"] = FALLBACK_OPERATION
+                    succeeded.append(FALLBACK_OPERATION)
+                else:
+                    warnings.append("location: not_visible_in_profile_page")
+            except (CircuitOpen, UpstreamFailure) as exc:
+                warnings.append(f"location: {type(exc).__name__}")
+
         profile = normalize_profile(
             canonical.slug, core, sections, timestamp, section_failures=section_failures
         )

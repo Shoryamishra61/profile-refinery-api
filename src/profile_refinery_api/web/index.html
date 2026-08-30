@@ -40,7 +40,7 @@
           <span class="exchange-index">02 / YOU GET</span>
           <strong>Normalized profiles</strong>
           <strong>Evidence status</strong>
-          <strong>JSON + CSV</strong>
+          <strong>JSON + CSV + profile cards</strong>
         </div>
       </div>
     </section>
@@ -140,6 +140,7 @@
           <h2 id="results-title">The refined dataset</h2>
         </div>
         <div class="export-actions">
+          <button type="button" id="open-profile-cards">View profile cards</button>
           <button type="button" id="download-json">Download JSON</button>
           <button type="button" id="download-csv">Download CSV</button>
         </div>
@@ -175,6 +176,29 @@
       </div>
     </section>
   </main>
+
+  <dialog class="card-dialog" id="profile-card-dialog" aria-labelledby="card-dialog-title">
+    <div class="card-viewer">
+      <header class="card-viewer-header">
+        <div>
+          <p class="eyebrow">HUMAN-READABLE OUTPUT</p>
+          <h2 id="card-dialog-title">Profile card</h2>
+        </div>
+        <button class="card-close" id="close-profile-card" type="button" aria-label="Close profile card">Close</button>
+      </header>
+      <div class="card-stage" id="card-stage">
+        <div id="profile-card-canvas"></div>
+      </div>
+      <footer class="card-viewer-actions">
+        <div class="card-pager" aria-label="Profile card navigation">
+          <button id="previous-profile-card" type="button">Previous</button>
+          <span id="card-position" aria-live="polite"></span>
+          <button id="next-profile-card" type="button">Next</button>
+        </div>
+        <button class="download-card" id="download-profile-card" type="button">Download card (.html)</button>
+      </footer>
+    </div>
+  </dialog>
 
   <footer>
     <span>PROFILE REFINERY / EVIDENCE-FIRST PROFILE DATA</span>

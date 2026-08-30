@@ -16,7 +16,7 @@ from typing import Any
 
 from .errors import UpstreamOperationDrift
 
-RSC_PARSER_VERSION = "linkedin-sdui-flight-v1"
+RSC_PARSER_VERSION = "linkedin-sdui-flight-v2"
 _CURRENT_DATE_LABEL = "Present"
 
 _REFERENCE_RE = re.compile(r"^\$L?([0-9a-f]+)$")
@@ -331,6 +331,96 @@ def parse_rsc_core_payload(payload: dict[str, Any], slug: str) -> dict[str, Any]
         "background_image": None,
         "unknown_entity_types": [],
     }
+
+
+def parse_rsc_page_core_payload(payload: dict[str, Any], slug: str) -> dict[str, Any]:
+    """Parse the target overview from a profile page rehydration stream.
+
+    Modern profile pages no longer necessarily embed a Voyager ``included``
+    graph. They do embed the server-owned React Flight model used to hydrate
+    the page. The profile is selected by the semantic ``profile-top-card``
+    view, and location is selected from the smallest horizontal row that owns
+    the contact-details navigation action. No CSS class or DOM position is
+    used as an identity signal.
+    """
+
+    text = payload.get("page_flight")
+    if not isinstance(text, str):
+        raise UpstreamOperationDrift("profile_page", "Profile page lacks Flight data.")
+    document = FlightDocument.parse(text)
+    top_cards = [
+        node
+        for record in document.records.values()
+        for node in _objects(document.resolve(record))
+        if _view_name(node) == "profile-top-card"
+    ]
+    if not top_cards:
+        raise UpstreamOperationDrift(
+            "profile_page", "Profile page Flight lacks a semantic profile top card."
+        )
+    top_card = min(top_cards, key=_serialized_size)
+
+    names = _stable_unique(
+        [
+            " ".join(part.strip() for part in (given, family) if part.strip())
+            for node in _objects(top_card)
+            if isinstance((given := node.get("givenName")), str)
+            and isinstance((family := node.get("familyName")), str)
+        ]
+        + [
+            " ".join(part.strip() for part in (first, last) if part.strip())
+            for node in _objects(top_card)
+            if isinstance((first := node.get("firstName")), str)
+            and isinstance((last := node.get("lastName")), str)
+        ]
+    )
+    name = next((candidate for candidate in names if candidate), None)
+    if not name:
+        raise UpstreamOperationDrift(
+            "profile_page", "Semantic profile top card lacks a target name."
+        )
+
+    location_rows = [
+        node
+        for node in _objects(top_card)
+        if node.get("direction") == "horizontal"
+        and any(
+            isinstance(child.get("screenId"), str)
+            and child["screenId"].endswith(".ProfileContactDetailsOverlay")
+            for child in _objects(node)
+        )
+    ]
+    location = None
+    if location_rows:
+        row_text = _visible_text(min(location_rows, key=_serialized_size))
+        # Captured rows contain location, a separator, and the localized
+        # contact-details label. A hidden location produces only the action.
+        if len(row_text) >= 3 and row_text[0].strip(" ·•|"):
+            location = row_text[0].strip()
+
+    first_name, _, last_name = name.partition(" ")
+    return {
+        "identity": {"member_urn": None, "public_identifier": slug},
+        "first_name": first_name or None,
+        "last_name": last_name or None,
+        "name": name,
+        "headline": None,
+        "location": location,
+        "about": None,
+        "profile_image": None,
+        "background_image": None,
+        "unknown_entity_types": [],
+    }
+
+
+def _view_name(value: dict[str, Any]) -> str | None:
+    specs = value.get("viewTrackingSpecs")
+    view_name = specs.get("viewName") if isinstance(specs, dict) else None
+    return view_name if isinstance(view_name, str) else None
+
+
+def _serialized_size(value: Any) -> int:
+    return len(json.dumps(value, separators=(",", ":")))
 
 
 def _safe_model_signature(value: Any) -> str:

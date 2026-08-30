@@ -207,7 +207,7 @@ Every required field, its source operation, and verification status:
 |---|---|---|---|
 | name (first/last/full) | `profile_view`, then `profile_page` fallback | semantic RSC state or owned Profile entity | implemented; `REAL_HAR_REPLAY`/`SYNTHETIC_UNIT`; current production blocked |
 | headline | same core plan | semantic RSC state or owned Profile entity | implemented; current production blocked |
-| location | same core plan | owned Profile location | implemented; current production blocked |
+| location | `profile_view`, then bounded `profile_page` enrichment when absent | semantic `profile-top-card` contact row in page rehydration Flight | implemented; two unrelated `REAL_HAR_REPLAY` captures and `SYNTHETIC_UNIT`; fresh deployment not yet verified |
 | about | same core plan | owned Profile summary | implemented; current production blocked |
 | profile image | same core plan | semantic image state or owned vector image | implemented; current production blocked |
 | background image | same core plan | owned background image | implemented; current production blocked |

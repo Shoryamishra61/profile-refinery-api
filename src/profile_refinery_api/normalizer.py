@@ -68,6 +68,11 @@ def normalize_profile(
     )
 
     failures = section_failures or {}
+    field_sources = core.get("_field_sources", {})
+
+    def core_source(name: str) -> str:
+        source = field_sources.get(name) if isinstance(field_sources, dict) else None
+        return source if isinstance(source, str) else "profile_core"
 
     def section(name: str, model: type[Any]) -> ProfileField[Any]:
         if name in failures:
@@ -90,7 +95,9 @@ def normalize_profile(
         last_name=field(core.get("last_name"), "profile_core", observed_at, raw_ref=core_ref),
         name=field(core.get("name"), "profile_core", observed_at, raw_ref=core_ref),
         headline=field(core.get("headline"), "profile_core", observed_at, raw_ref=core_ref),
-        location=field(core.get("location"), "profile_core", observed_at, raw_ref=core_ref),
+        location=field(
+            core.get("location"), core_source("location"), observed_at, raw_ref=core_ref
+        ),
         about=field(core.get("about"), "profile_core", observed_at, raw_ref=core_ref),
         experience=section("experience", Experience),
         education=section("education", Education),

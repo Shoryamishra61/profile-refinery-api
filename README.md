@@ -76,7 +76,11 @@ The deployed primary protocol is LinkedIn SDUI over React Flight:
    fallback and parse embedded semantic profile data. Challenges remain terminal.
 4. Request the enabled Experience, Education, Skills, Certifications, and
    Languages profile-card components using that target identity.
-5. Parse semantic entities and normalize them against the public schema.
+5. When the Activity component omits location, make one bounded `profile_page`
+   enrichment request and decode the server's `rehydrate-data` Flight stream.
+   Location is selected only from the semantic `profile-top-card` contact row;
+   a hidden location remains null.
+6. Parse semantic entities and normalize them against the public schema.
 
 The request uses JSON, `csrf-token`, `x-li-anchor-page-key`, and
 `x-li-rsc-stream`. Dynamic trace, page-instance, and parent-span telemetry is not
@@ -134,7 +138,9 @@ POST /v1/session-extractions
 Profiles are processed sequentially. An upstream challenge or open circuit
 stops the remaining list; skipped entries are explicit and no alternate account,
 proxy rotation, browser, fixture, or replay is attempted. The web interface can
-download the returned normalized records as JSON or a safe flattened CSV.
+download the returned normalized records as JSON, a safe flattened CSV, or a
+self-contained HTML profile card. It also renders an accessible responsive
+profile-card viewer with subtle pointer depth and reduced-motion support.
 Fields outside the current direct-HTTP contract—such as professional email,
 company industry, follower counts, and connection degree—remain unavailable
 rather than being inferred.

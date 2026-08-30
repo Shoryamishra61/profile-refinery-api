@@ -33,6 +33,11 @@ _MAX_HTML_EMBEDDED_BYTES = 4_000_000
 # <code><!--{...}--></code> blocks. Embedded-JSON documents may also appear in
 # inline scripts; both shapes are scanned for {"included": [...]} documents.
 _CODE_BLOCK_RE = re.compile(r"<code[^>]*><!--(.*?)--></code>", re.DOTALL)
+_REHYDRATION_RE = re.compile(
+    r'<script[^>]+id=["\']rehydrate-data["\'][^>]*>\s*'
+    r"window\.__como_rehydration__\s*=\s*(\[.*?\])\s*;?\s*</script>",
+    re.DOTALL,
+)
 _INCLUDED_KEY = '{"included"'
 
 
@@ -108,6 +113,26 @@ def extract_embedded_json(html: str) -> dict[str, Any] | None:
             if best is None or size > len(best["included"]):
                 best = payload
     return best
+
+
+def extract_rehydration_flight(html: str) -> dict[str, Any] | None:
+    """Extract the bounded React Flight stream embedded by a profile page."""
+
+    match = _REHYDRATION_RE.search(html)
+    if match is None or len(match.group(1).encode()) > _MAX_HTML_EMBEDDED_BYTES:
+        return None
+    try:
+        chunks = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(chunks, list) or not chunks or not all(
+        isinstance(chunk, str) for chunk in chunks
+    ):
+        return None
+    flight = "".join(chunks)
+    if not flight or len(flight.encode()) > _MAX_HTML_EMBEDDED_BYTES:
+        return None
+    return {"page_flight": flight}
 
 
 def _decode_json_object(text: str) -> Any:
@@ -487,11 +512,11 @@ class LinkedInTransport:
                 operation.semantic_name, "Upstream payload exceeded the configured size limit."
             )
         html = response.text
-        payload = extract_embedded_json(html)
+        payload = extract_embedded_json(html) or extract_rehydration_flight(html)
         if payload is None:
             raise UpstreamOperationDrift(
                 operation.semantic_name,
-                "No embedded Voyager JSON document was found in the profile page.",
+                "No embedded Voyager graph or rehydration Flight stream was found.",
             )
         log_operation(
             OperationEvent(

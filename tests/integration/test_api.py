@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 from conftest import FULL_PROFILE_FIXTURE
@@ -176,6 +178,84 @@ async def test_valid_profile_view_core_does_not_call_profile_page(
 
 
 @pytest.mark.asyncio
+async def test_missing_rsc_location_is_enriched_from_profile_page_flight(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    def record(value: object) -> str:
+        return f"0:{json.dumps(value, separators=(',', ':'))}"
+
+    def set_state(state_id: str, value: dict[str, object]) -> dict[str, object]:
+        return {
+            "$type": "proto.sdui.actions.core.SetState",
+            "value": {
+                "state": {
+                    "key": {"key": {"value": {"id": state_id}}},
+                    "value": value,
+                }
+            },
+        }
+
+    core_flight = record(
+        {
+            "resolver": {"prioritizedProfileId": "ACoCAPTURED"},
+            "actions": [
+                set_state(
+                    "profile_name_loading_state",
+                    {"$case": "stringValue", "stringValue": "Captured Person"},
+                )
+            ],
+        }
+    )
+    page_flight = record(
+        [
+            "$",
+            "section",
+            None,
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"givenName": "Captured", "familyName": "Person"},
+                    [
+                        "$",
+                        "div",
+                        None,
+                        {
+                            "direction": "horizontal",
+                            "children": [
+                                "Greater Chennai Area",
+                                "·",
+                                {
+                                    "children": ["Contact info"],
+                                    "screenId": (
+                                        "com.linkedin.sdui.flagshipnav.profile."
+                                        "ProfileContactDetailsOverlay"
+                                    ),
+                                },
+                            ],
+                        },
+                    ],
+                ],
+            },
+        ]
+    )
+    stub_transport.set("profile_view", [{"flight": core_flight}])
+    stub_transport.set("profile_page", [{"page_flight": page_flight}])
+
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/captured-person/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["profile"]["location"]["value"] == "Greater Chennai Area"
+    assert body["profile"]["location"]["provenance"]["source_operation"] == "profile_page"
+    assert body["meta"]["operations_attempted"][-1] == "profile_page"
+    assert body["meta"]["operations_succeeded"][-1] == "profile_page"
+
+
+@pytest.mark.asyncio
 async def test_profile_view_challenge_is_terminal_without_page_fallback(
     client: httpx.AsyncClient, stub_transport: object
 ) -> None:
@@ -250,7 +330,12 @@ async def test_extraction_desk_and_assets_are_public(client: httpx.AsyncClient) 
     assert "No product key or account required." in page.text
     assert "api-key" not in page.text.casefold()
     assert "Request memory only" in page.text
+    assert "View profile cards" in page.text
+    assert 'id="profile-card-dialog"' in page.text
     assert "localStorage" not in script.text
+    assert "View immersive card" in script.text
+    assert "profile-card.html" in script.text
+    assert "https://*.licdn.com" in page.headers["content-security-policy"]
     assert stylesheet.status_code == 200
     assert script.status_code == 200
 

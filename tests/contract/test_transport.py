@@ -410,6 +410,26 @@ async def test_page_fallback_extracts_embedded_json(monkeypatch) -> None:
 
 
 @respx.mock
+async def test_page_fallback_extracts_modern_rehydration_flight(monkeypatch) -> None:
+    _, _, _, transport = live_components(monkeypatch)
+    flight = '0:{"children":["Captured profile"]}\n'
+    rehydration = json.dumps([flight])
+    html = (
+        '<script type="text/javascript" id="rehydrate-data">'
+        f"window.__como_rehydration__ = {rehydration};"
+        "</script>"
+    )
+    respx.get("https://www.linkedin.com/in/some-person/").mock(
+        return_value=Response(200, text=html, headers={"content-type": "text/html"})
+    )
+
+    result = await transport.execute("profile_page", "some-person", "req-1")
+    await transport.aclose()
+
+    assert result.payload == {"page_flight": flight}
+
+
+@respx.mock
 async def test_page_bot_wall_999_is_challenge_session_survives(monkeypatch) -> None:
     _, _, session, transport = live_components(monkeypatch)
     respx.get("https://www.linkedin.com/in/some-person/").mock(return_value=Response(999))

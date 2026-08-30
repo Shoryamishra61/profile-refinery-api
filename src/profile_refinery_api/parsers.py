@@ -27,7 +27,12 @@ from .graph import (
     NormalizedGraph,
     TargetProfileMissing,
 )
-from .rsc import RSC_PARSER_VERSION, parse_rsc_core_payload, parse_rsc_section_payload
+from .rsc import (
+    RSC_PARSER_VERSION,
+    parse_rsc_core_payload,
+    parse_rsc_page_core_payload,
+    parse_rsc_section_payload,
+)
 
 PARSER_VERSION = f"normalized-graph-v2+{RSC_PARSER_VERSION}"
 
@@ -312,6 +317,11 @@ def parse_core_payload(payload: dict[str, Any], slug: str) -> dict[str, Any]:
     if "flight" in payload:
         return {
             "core": parse_rsc_core_payload(payload, slug),
+            "sections": {name: [] for name in SECTION_ENTITY_SUFFIXES},
+        }
+    if "page_flight" in payload:
+        return {
+            "core": parse_rsc_page_core_payload(payload, slug),
             "sections": {name: [] for name in SECTION_ENTITY_SUFFIXES},
         }
     graph = NormalizedGraph(payload, slug=slug)

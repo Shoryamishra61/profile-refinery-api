@@ -11,6 +11,7 @@ from profile_refinery_api.rsc import (
     build_profile_activity_body,
     build_profile_component_body,
     parse_rsc_core_payload,
+    parse_rsc_page_core_payload,
     parse_rsc_section_payload,
 )
 
@@ -106,6 +107,76 @@ def test_activity_core_uses_prioritized_target_and_semantic_states() -> None:
     assert result["name"] == "Captured Person"
     assert result["headline"] == "Protocol Engineer"
     assert result["profile_image"] == {"url": "https://media.licdn.com/root-large"}
+
+
+def test_profile_page_core_uses_semantic_contact_row_for_location() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"givenName": "Captured", "familyName": "Person"},
+                    _element(
+                        {
+                            "direction": "horizontal",
+                            "children": [
+                                "Greater Chennai Area",
+                                "·",
+                                {
+                                    "children": ["Contact info"],
+                                    "action": {
+                                        "screenId": (
+                                            "com.linkedin.sdui.flagshipnav.profile."
+                                            "ProfileContactDetailsOverlay"
+                                        )
+                                    },
+                                },
+                            ],
+                        }
+                    ),
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "captured-person")
+
+    assert result["name"] == "Captured Person"
+    assert result["location"] == "Greater Chennai Area"
+    assert result["identity"]["public_identifier"] == "captured-person"
+
+
+def test_profile_page_core_does_not_invent_hidden_location() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"firstName": "Private", "lastName": "Member"},
+                    _element(
+                        {
+                            "direction": "horizontal",
+                            "children": [
+                                {
+                                    "children": ["Contact info"],
+                                    "screenId": (
+                                        "com.linkedin.sdui.flagshipnav.profile."
+                                        "ProfileContactDetailsOverlay"
+                                    ),
+                                }
+                            ],
+                        }
+                    ),
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "private-member")
+
+    assert result["location"] is None
 
 
 def test_flight_document_resolves_lazy_model_references() -> None:

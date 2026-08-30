@@ -69,7 +69,8 @@ def build_router(runtime: Runtime) -> APIRouter:
                 "Cache-Control": "no-cache",
                 "Content-Security-Policy": (
                     "default-src 'self'; script-src 'self'; style-src 'self'; "
-                    "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
+                    "img-src 'self' data: https://*.licdn.com; connect-src 'self'; "
+                    "object-src 'none'; "
                     "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
                 ),
                 "Referrer-Policy": "no-referrer",

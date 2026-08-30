@@ -16,7 +16,11 @@
   const resultList = document.querySelector("#result-list");
   const runSummary = document.querySelector("#run-summary");
   const urlCount = document.querySelector("#url-count");
+  const cardDialog = document.querySelector("#profile-card-dialog");
+  const cardCanvas = document.querySelector("#profile-card-canvas");
+  const cardPosition = document.querySelector("#card-position");
   let latestResponse = null;
+  let currentCardIndex = 0;
 
   userAgentInput.value = navigator.userAgent;
 
@@ -55,6 +59,115 @@
     const field = profile?.profile?.[key];
     return Array.isArray(field?.value) ? field.value.length : "—";
   };
+
+  const safeHttpsUrl = (value) => {
+    try {
+      const url = new URL(String(value || ""));
+      return url.protocol === "https:" ? url.href : "";
+    } catch {
+      return "";
+    }
+  };
+
+  const formatObserved = (value) => {
+    const date = new Date(value || "");
+    return Number.isNaN(date.valueOf())
+      ? "Observation time unavailable"
+      : `Observed ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date)}`;
+  };
+
+  const formatDateValue = (value) => {
+    if (!value?.year) return "";
+    if (!value.month) return String(value.year);
+    return new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" })
+      .format(new Date(value.year, value.month - 1, 1));
+  };
+
+  const profileCardMarkup = (profile) => {
+    const name = fieldValue(profile, "name", "Unnamed profile");
+    const identity = fieldValue(profile, "identity", {});
+    const slug = identity?.vanity_slug || identity?.public_identifier || "profile";
+    const headline = fieldValue(profile, "headline", "Headline not provided");
+    const location = fieldValue(profile, "location", "Location not provided");
+    const about = fieldValue(profile, "about", "About section not provided by the upstream profile.");
+    const imageUrl = safeHttpsUrl(fieldValue(profile, "profile_image", {})?.url);
+    const canonicalUrl = safeHttpsUrl(profile?.canonical_url);
+    const experience = fieldValue(profile, "experience", []);
+    const education = fieldValue(profile, "education", []);
+    const skills = fieldValue(profile, "skills", []);
+    const certifications = fieldValue(profile, "certifications", []);
+    const languages = fieldValue(profile, "languages", []);
+    const initial = String(name).trim().charAt(0).toUpperCase() || "P";
+
+    const entries = (title, values, renderer, open = false) => {
+      const rows = Array.isArray(values) ? values.map(renderer).filter(Boolean) : [];
+      const content = rows.length
+        ? rows.map((row) => `<div class="passport-entry"><strong>${escapeHtml(row.title)}</strong>${row.meta ? `<span>${escapeHtml(row.meta)}</span>` : ""}</div>`).join("")
+        : '<p class="passport-empty">No upstream evidence returned for this section.</p>';
+      return `<details class="passport-section"${open ? " open" : ""}><summary>${escapeHtml(title)} <span>${rows.length}</span></summary><div class="passport-section-content">${content}</div></details>`;
+    };
+
+    const experienceRows = entries("Experience", experience, (item) => {
+      const dates = [formatDateValue(item.start_date), item.is_current ? "Present" : formatDateValue(item.end_date)].filter(Boolean).join(" – ");
+      return { title: item.title || item.company_name || "Role", meta: [item.company_name, dates, item.location].filter(Boolean).join(" · ") };
+    }, true);
+    const educationRows = entries("Education", education, (item) => ({
+      title: item.school_name || "Education",
+      meta: [item.degree_name, item.field_of_study, formatDateValue(item.end_date)].filter(Boolean).join(" · "),
+    }));
+    const skillRows = entries("Skills", skills, (item) => ({ title: item.name || "", meta: "" }));
+    const certificationRows = entries("Certifications", certifications, (item) => ({ title: item.name || "", meta: item.authority || "" }));
+    const languageRows = entries("Languages", languages, (item) => ({ title: item.name || "", meta: item.proficiency || "" }));
+    const avatar = imageUrl
+      ? `<img class="passport-avatar" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)} profile photo" referrerpolicy="no-referrer">`
+      : `<div class="passport-avatar passport-avatar-fallback" aria-label="No profile photo returned">${escapeHtml(initial)}</div>`;
+
+    return `<article class="profile-passport" tabindex="0" aria-label="Profile card for ${escapeHtml(name)}">
+      <section class="passport-identity">
+        <p class="passport-kicker">${escapeHtml(String(profile?.retrieval?.mode || "live").toUpperCase())} / NORMALIZED PROFILE</p>
+        ${avatar}
+        <h3>${escapeHtml(name)}</h3>
+        <p class="passport-slug">linkedin.com/in/${escapeHtml(slug)}</p>
+        <p class="passport-headline">${escapeHtml(headline)}</p>
+        <p class="passport-location"><span>Location</span>${escapeHtml(location)}</p>
+        ${canonicalUrl ? `<a class="passport-profile-link" href="${escapeHtml(canonicalUrl)}" target="_blank" rel="noopener noreferrer">View source profile</a>` : ""}
+      </section>
+      <section class="passport-data">
+        <div class="passport-summary" aria-label="Profile section counts">
+          <div class="passport-metric"><strong>${countField(profile, "experience")}</strong><span>Experience</span></div>
+          <div class="passport-metric"><strong>${countField(profile, "education")}</strong><span>Education</span></div>
+          <div class="passport-metric"><strong>${countField(profile, "skills")}</strong><span>Skills</span></div>
+          <div class="passport-metric"><strong>${countField(profile, "certifications")}</strong><span>Credentials</span></div>
+          <div class="passport-metric"><strong>${countField(profile, "languages")}</strong><span>Languages</span></div>
+        </div>
+        <p class="passport-about">${escapeHtml(about)}</p>
+        <div class="passport-sections">${experienceRows}${educationRows}${skillRows}${certificationRows}${languageRows}</div>
+        <p class="passport-observed">${escapeHtml(formatObserved(profile?.observed_at))} · Missing values remain missing.</p>
+      </section>
+    </article>`;
+  };
+
+  const successfulProfiles = () => (latestResponse?.results || [])
+    .filter((result) => result.profile)
+    .map((result) => result.profile);
+
+  const showProfileCard = (index) => {
+    const profiles = successfulProfiles();
+    if (!profiles.length) return;
+    currentCardIndex = (index + profiles.length) % profiles.length;
+    cardCanvas.innerHTML = profileCardMarkup(profiles[currentCardIndex]);
+    cardPosition.textContent = `${currentCardIndex + 1} / ${profiles.length}`;
+    document.querySelector("#previous-profile-card").disabled = profiles.length < 2;
+    document.querySelector("#next-profile-card").disabled = profiles.length < 2;
+    if (!cardDialog.open) cardDialog.showModal();
+    cardCanvas.querySelector(".profile-passport")?.focus({ preventScroll: true });
+  };
+
+  const standaloneCardDocument = (profile) => `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(fieldValue(profile, "name", "Profile"))} · Profile card</title>
+<style>${document.querySelector("#standalone-card-styles")?.textContent || `
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;color:#f7f4ea;background:radial-gradient(circle at 15% 10%,#415bc0,#0d1224 58%);font-family:Arial,sans-serif}.profile-passport{width:min(940px,100%);display:grid;grid-template-columns:minmax(250px,.72fr) minmax(0,1.28fr);border:1px solid #ffffffb8;border-radius:28px;overflow:hidden;background:linear-gradient(145deg,#1f2a4f,#0e1327);box-shadow:0 38px 90px #0008}.passport-identity,.passport-data{padding:32px}.passport-identity{display:flex;flex-direction:column;border-right:1px solid #ffffff2e;background:linear-gradient(180deg,#1755e861,transparent 54%)}.passport-kicker,.passport-slug,.passport-location span,.passport-observed{font:700 11px monospace;text-transform:uppercase;letter-spacing:.08em;color:#d9ff43}.passport-avatar{width:148px;height:148px;margin:28px 0 20px;border:4px solid #fff;border-radius:50%;object-fit:cover}.passport-avatar-fallback{display:grid;place-items:center;color:#141412;background:#d9ff43;font:64px Georgia}.passport-identity h3{margin:0;font:56px/.92 Georgia}.passport-slug{color:#9eb9ff;text-transform:none}.passport-headline{line-height:1.45}.passport-location{margin-top:auto;padding-top:20px;border-top:1px solid #ffffff38}.passport-location span{display:block;margin-bottom:5px}.passport-profile-link{color:white}.passport-data{display:flex;flex-direction:column;gap:18px}.passport-summary{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid #ffffff2e;border-radius:16px;overflow:hidden}.passport-metric{padding:12px 6px;border-right:1px solid #ffffff29;text-align:center}.passport-metric:last-child{border:0}.passport-metric strong{display:block;color:#d9ff43;font:28px Georgia}.passport-metric span{font:9px monospace;text-transform:uppercase}.passport-about{color:#d8d9e2}.passport-sections{display:grid;gap:10px}.passport-section{border:1px solid #ffffff2e;border-radius:12px}.passport-section summary{display:flex;justify-content:space-between;padding:12px 16px;font:700 11px monospace;text-transform:uppercase;cursor:pointer}.passport-section summary span{color:#d9ff43}.passport-section-content{display:grid;gap:8px;padding:0 16px 16px}.passport-entry{padding:10px;border-left:3px solid #1755e8;background:#ffffff0f}.passport-entry strong,.passport-entry span{display:block}.passport-entry span,.passport-empty{margin-top:3px;color:#b9bfd0;font-size:12px}@media(max-width:720px){body{padding:0}.profile-passport{grid-template-columns:1fr;border-radius:0}.passport-identity{border-right:0;border-bottom:1px solid #ffffff2e}.passport-summary{grid-template-columns:repeat(3,1fr)}}`}</style></head><body>${profileCardMarkup(profile)}</body></html>`;
 
   const flatten = (result) => {
     const profile = result.profile;
@@ -133,6 +246,7 @@
             <span class="result-status ${className}">${escapeHtml(result.status)}</span>
           </div>
           ${facts}
+          ${profile ? `<div class="result-actions"><button class="view-card-button" type="button" data-profile-card="${index}">View immersive card</button></div>` : ""}
           <p class="operation-line">PROVENANCE / ${escapeHtml(profile?.retrieval?.mode || "none")} · ${escapeHtml(operations)}</p>
         </div>
       </article>`;
@@ -168,6 +282,45 @@
     const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
     const csv = [headers.map(csvCell).join(","), ...rows.map((row) => headers.map((key) => csvCell(row[key])).join(","))].join("\r\n");
     download("profile-refinery-profiles.csv", csv, "text/csv;charset=utf-8");
+  });
+
+  document.querySelector("#open-profile-cards").addEventListener("click", () => showProfileCard(0));
+  resultList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-profile-card]");
+    if (!button) return;
+    const sourceIndex = Number(button.dataset.profileCard);
+    const sourceResult = latestResponse?.results?.[sourceIndex];
+    const profiles = successfulProfiles();
+    showProfileCard(profiles.indexOf(sourceResult?.profile));
+  });
+  document.querySelector("#close-profile-card").addEventListener("click", () => cardDialog.close());
+  document.querySelector("#previous-profile-card").addEventListener("click", () => showProfileCard(currentCardIndex - 1));
+  document.querySelector("#next-profile-card").addEventListener("click", () => showProfileCard(currentCardIndex + 1));
+  document.querySelector("#download-profile-card").addEventListener("click", () => {
+    const profile = successfulProfiles()[currentCardIndex];
+    if (!profile) return;
+    const identity = fieldValue(profile, "identity", {});
+    const slug = String(identity?.vanity_slug || "profile").replace(/[^a-z0-9_-]/gi, "-");
+    download(`${slug}-profile-card.html`, standaloneCardDocument(profile), "text/html;charset=utf-8");
+  });
+  cardDialog.addEventListener("click", (event) => {
+    if (event.target === cardDialog) cardDialog.close();
+  });
+  cardCanvas.addEventListener("pointermove", (event) => {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || innerWidth < 700) return;
+    const card = cardCanvas.querySelector(".profile-passport");
+    if (!card) return;
+    const bounds = card.getBoundingClientRect();
+    const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 8;
+    const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * -8;
+    card.style.setProperty("--tilt-x", `${y.toFixed(2)}deg`);
+    card.style.setProperty("--tilt-y", `${x.toFixed(2)}deg`);
+  });
+  cardCanvas.addEventListener("pointerleave", () => {
+    const card = cardCanvas.querySelector(".profile-passport");
+    if (!card) return;
+    card.style.setProperty("--tilt-x", "0deg");
+    card.style.setProperty("--tilt-y", "0deg");
   });
 
   form.addEventListener("submit", async (event) => {
