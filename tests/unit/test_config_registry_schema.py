@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,11 @@ def test_live_settings_can_start_without_session_secrets() -> None:
 def test_api_keys_are_optional_for_public_extraction_desk() -> None:
     settings = Settings(app_api_keys=[])
     assert settings.api_key_values == ()
+
+
+def test_default_store_uses_writable_platform_temp_directory() -> None:
+    settings = Settings(app_api_keys=[])
+    assert settings.app_store_dir.parent == Path(tempfile.gettempdir())
 
 
 def test_schema_missing_fails_closed(tmp_path: Path) -> None:

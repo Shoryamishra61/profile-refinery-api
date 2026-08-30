@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -53,7 +54,9 @@ class Settings(BaseSettings):
     app_breaker_failure_threshold: int = Field(default=3, ge=1, le=200)
     app_breaker_cooldown_seconds: float = Field(default=300.0, gt=0, le=3600)
     # Durable job journal directory (survives warm process restarts).
-    app_store_dir: Path = Path("./.profile_refinery_store")
+    # Serverless deployment filesystems are read-only outside their temporary
+    # directory. Callers that need durable batch storage must override this.
+    app_store_dir: Path = Path(tempfile.gettempdir()) / "profile_refinery_store"
     app_batch_max_urls: int = Field(default=200, ge=1, le=5_000)
     app_batch_max_file_bytes: int = Field(default=5_242_880, ge=1024, le=52_428_800)
     app_batch_concurrency: int = Field(default=3, ge=1, le=10)
