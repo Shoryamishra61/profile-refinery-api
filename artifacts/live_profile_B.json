@@ -1,0 +1,38 @@
+{
+  "evidence_class": "LIVE",
+  "observed_at": "2026-08-30T06:47:48.583251+00:00",
+  "evidence_recorded_at": "2026-08-30T06:48:14.9594251Z",
+  "request_id": "local-unrelated-20260830",
+  "http_status": 200,
+  "canonical_url": "https://www.linkedin.com/in/williamhgates",
+  "retrieval": {
+    "mode": "live",
+    "fixture": false,
+    "replay": false,
+    "cache": false
+  },
+  "operations_attempted": [
+    "profile_view",
+    "profile_experience",
+    "profile_education",
+    "profile_skills",
+    "profile_languages"
+  ],
+  "operations_succeeded": [
+    "profile_view",
+    "profile_experience",
+    "profile_education",
+    "profile_skills",
+    "profile_languages"
+  ],
+  "transport_strategy": "profile_view",
+  "name": "Bill Gates",
+  "identity_present": true,
+  "identity_fingerprint_sha256_prefix": "d62a02e7bc1a5404",
+  "experience_count": 3,
+  "education_count": 2,
+  "skills_count": 0,
+  "certifications_count": 0,
+  "languages_count": 0,
+  "profile_image_present": true
+}

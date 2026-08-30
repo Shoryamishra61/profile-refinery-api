@@ -5,9 +5,8 @@
 Historical versions of `scripts/session_capture_watch.py` contained literal
 LinkedIn companion-cookie values. The values first appeared in commit
 `c013a500e3e924e1b09ddf9ddf9a9cf002dc8816` and remained in the public history
-through `f91b5ecd1ea956cea329a3f062d151a4ac1397c2`. They were removed from the
-current tree; the script now reads optional companion cookies from the
-`LINKEDIN_COOKIE` secret at runtime.
+through `f91b5ecd1ea956cea329a3f062d151a4ac1397c2`. The affected script was
+removed from every rewritten Git revision.
 
 The public Git history was not rewritten because downstream clones may already
 exist. The affected LinkedIn session and its complete cookie set must be

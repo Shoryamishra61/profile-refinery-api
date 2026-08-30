@@ -39,6 +39,27 @@ Evidence labels have these exact meanings:
 Only `LIVE` evidence can establish production extraction success. Passing tests
 and `REAL_HAR_REPLAY` prove contracts and parsing, not current upstream behavior.
 
+## Verified local live evidence
+
+On 2026-08-30, two controlled direct-HTTP extractions succeeded from the local
+environment with retries disabled. No browser runtime, fixture, replay, or cache
+was used:
+
+| Profile | Core | Experience | Education | Skills | Certifications | Languages | Image |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Shorya Mishra | present | 5 | 1 | 3 | 5 | 0 | present |
+| Bill Gates | present | 3 | 2 | 0 | 0 | 0 | present |
+
+For both calls, `profile_view` and the required section operations succeeded and
+`retrieval.mode` was `live` with `fixture=false`. The names, canonical URLs, and
+resolved identities differed. Sanitized evidence is stored in
+`artifacts/live_profile_A.json` and `artifacts/live_profile_B.json`. Empty
+Languages is an observed result, not evidence of a parser failure.
+
+The supplied real HAR independently replayed as Experience 5, Education 1,
+Skills 3, Certifications 5, and Languages 0 (`REAL_HAR_REPLAY`). The HAR itself
+is excluded from Git because it contains private profile/session context.
+
 ## Active extraction protocol
 
 The deployed primary protocol is LinkedIn SDUI over React Flight:
@@ -232,9 +253,9 @@ from the full `pytest` run; it is not evidence of live LinkedIn extraction.
 - The latest production core trace is not usable live evidence: the primary RSC
   response lacked target identity and the authenticated page fallback received
   a 302 challenge.
-- The repository contains sanitized synthetic parser fixtures, but no checked-in
-  real HAR payload with non-empty Certifications and Languages. Those two
-  non-empty parser cases remain `SYNTHETIC_UNIT`, not `REAL_HAR_REPLAY` or `LIVE`.
+- Certifications now has non-empty `LIVE` and `REAL_HAR_REPLAY` evidence.
+  Languages was reached and parsed successfully but was empty on both live
+  profiles and the real HAR; a non-empty real Languages case remains unverified.
 - The configured static proxy and alternative persistent host are deployment
   options only. Neither has been verified to change LinkedIn's response.
 - Profile completeness is viewer- and upstream-contract-dependent. Legitimately
