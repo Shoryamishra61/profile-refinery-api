@@ -341,6 +341,10 @@ async def test_extraction_desk_and_assets_are_public(client: httpx.AsyncClient) 
     assert "profile-card.html" in script.text
     assert "validateProfileUrl" in script.text
     assert "startProgress" in script.text
+    assert "normalizeMediaUrl" in script.text
+    assert "passport-avatar-shell" in script.text
+    assert "Open original image" in script.text
+    assert "touch-action: pan-y" in stylesheet.text
     assert "https://*.licdn.com" in page.headers["content-security-policy"]
     assert stylesheet.status_code == 200
     assert script.status_code == 200

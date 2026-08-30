@@ -131,6 +131,10 @@
     }
   };
 
+  const normalizeMediaUrl = (value) => safeHttpsUrl(
+    String(value || "").replaceAll("&amp;", "&").replaceAll("\\_", "_")
+  );
+
   const formatObserved = (value) => {
     const date = new Date(value || "");
     return Number.isNaN(date.valueOf())
@@ -166,7 +170,7 @@
     const headline = fieldValue(profile, "headline", "Headline not provided");
     const location = fieldValue(profile, "location", "Location not provided");
     const about = fieldValue(profile, "about", "About section not provided by the upstream profile.");
-    const imageUrl = safeHttpsUrl(fieldValue(profile, "profile_image", {})?.url);
+    const imageUrl = normalizeMediaUrl(fieldValue(profile, "profile_image", {})?.url);
     const canonicalUrl = safeHttpsUrl(profile?.canonical_url);
     const experience = fieldValue(profile, "experience", []);
     const education = fieldValue(profile, "education", []);
@@ -180,7 +184,7 @@
       if (!available.length) return "";
       return `<dl class="passport-fields">${available.map((field) => {
         const safeLink = field.link ? safeHttpsUrl(field.link) : "";
-        const value = escapeHtml(field.value);
+        const value = escapeHtml(field.display || field.value);
         return `<div><dt>${escapeHtml(field.label)}</dt><dd>${safeLink ? `<a href="${escapeHtml(safeLink)}" target="_blank" rel="noopener noreferrer">${value}</a>` : value}</dd></div>`;
       }).join("")}</dl>`;
     };
@@ -205,8 +209,8 @@
         { label: "Public identifier", value: identity?.public_identifier || "" },
         { label: "Member URN", value: identity?.member_urn || "" },
         { label: "Canonical profile", value: canonicalUrl, link: canonicalUrl },
-        { label: "Profile image", value: imageUrl, link: imageUrl },
-        { label: "Background image", value: safeHttpsUrl(fieldValue(profile, "background_image", {})?.url), link: safeHttpsUrl(fieldValue(profile, "background_image", {})?.url) },
+        { label: "Profile image", value: imageUrl, display: "Open original image", link: imageUrl },
+        { label: "Background image", value: normalizeMediaUrl(fieldValue(profile, "background_image", {})?.url), display: "Open original image", link: normalizeMediaUrl(fieldValue(profile, "background_image", {})?.url) },
       ],
     }], (item) => item);
     const experienceRows = entries("Experience", experience, (item) => {
@@ -265,13 +269,14 @@
         { label: "Entity ID", value: item.id },
       ],
     }));
-    const avatar = imageUrl
-      ? `<img class="passport-avatar" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)} profile photo" referrerpolicy="no-referrer">`
-      : `<div class="passport-avatar passport-avatar-fallback" aria-label="No profile photo returned">${escapeHtml(initial)}</div>`;
+    const avatar = `<div class="passport-avatar-shell">
+      <div class="passport-avatar passport-avatar-fallback" aria-hidden="${imageUrl ? "true" : "false"}">${escapeHtml(initial)}</div>
+      ${imageUrl ? `<img class="passport-avatar" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)} profile photo" referrerpolicy="no-referrer" decoding="async">` : ""}
+    </div>`;
 
     return `<article class="profile-passport" tabindex="0" aria-label="Profile card for ${escapeHtml(name)}">
       <section class="passport-identity">
-        <p class="passport-kicker">${escapeHtml(String(profile?.retrieval?.mode || "live").toUpperCase())} / NORMALIZED PROFILE</p>
+        <p class="passport-kicker">${escapeHtml(String(profile?.retrieval?.mode || "live").toUpperCase())} PROFILE</p>
         ${avatar}
         <h3>${escapeHtml(name)}</h3>
         <p class="passport-slug">linkedin.com/in/${escapeHtml(slug)}</p>
@@ -548,6 +553,13 @@
     card.style.setProperty("--tilt-x", "0deg");
     card.style.setProperty("--tilt-y", "0deg");
   });
+  cardCanvas.addEventListener("error", (event) => {
+    const image = event.target.closest("img.passport-avatar");
+    if (!image) return;
+    image.hidden = true;
+    const fallback = image.parentElement?.querySelector(".passport-avatar-fallback");
+    fallback?.setAttribute("aria-hidden", "false");
+  }, true);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
