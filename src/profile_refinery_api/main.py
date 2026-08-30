@@ -33,6 +33,8 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
         summary="Registry-driven direct HTTP profile normalization research API",
         version=__version__,
         openapi_version="3.1.0",
+        docs_url=None,
+        redoc_url=None,
         lifespan=lifespan,
     )
     application.state.runtime = active_runtime

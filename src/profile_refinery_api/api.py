@@ -104,6 +104,38 @@ def build_router(runtime: Runtime) -> APIRouter:
             headers={"Cache-Control": "public, max-age=300"},
         )
 
+    @router.get("/docs", include_in_schema=False, response_class=HTMLResponse)
+    async def api_docs() -> HTMLResponse:
+        return HTMLResponse(
+            WEB_ROOT.joinpath("docs.html").read_text(encoding="utf-8"),
+            headers={
+                "Cache-Control": "no-cache",
+                "Content-Security-Policy": (
+                    "default-src 'self'; script-src 'self'; style-src 'self'; "
+                    "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
+                    "base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+                ),
+                "Referrer-Policy": "no-referrer",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.get("/assets/docs.css", include_in_schema=False)
+    async def docs_css() -> Response:
+        return Response(
+            WEB_ROOT.joinpath("docs.css").read_text(encoding="utf-8"),
+            media_type="text/css",
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+
+    @router.get("/assets/docs.js", include_in_schema=False)
+    async def docs_js() -> Response:
+        return Response(
+            WEB_ROOT.joinpath("docs.js").read_text(encoding="utf-8"),
+            media_type="text/javascript",
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+
     @router.get("/v1/profile-media", include_in_schema=False)
     async def profile_media(
         url: Annotated[str, Query(min_length=1, max_length=4096)],
