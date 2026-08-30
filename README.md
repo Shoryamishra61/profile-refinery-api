@@ -120,6 +120,12 @@ inputs immediately after submission. This is an alternative to configuring a
 shared LinkedIn session in the backend. No Profile Refinery account or product
 API key is required for this request-scoped route.
 
+The extraction desk rejects malformed or non-member URLs line by line before
+submission, shows an indeterminate elapsed-time progress state while direct
+extraction is pending, and explains typed per-profile failures without hiding
+them behind a generic error. The page also includes copy-ready Python and
+Node.js backend examples plus links to `/docs` and `/openapi.json`.
+
 ```text
 POST /v1/session-extractions
 
@@ -140,7 +146,10 @@ stops the remaining list; skipped entries are explicit and no alternate account,
 proxy rotation, browser, fixture, or replay is attempted. The web interface can
 download the returned normalized records as JSON, a safe flattened CSV, or a
 self-contained HTML profile card. It also renders an accessible responsive
-profile-card viewer with subtle pointer depth and reduced-motion support.
+profile-card viewer with subtle pointer depth, reduced-motion support, and the
+full returned identity, overview, experience, education, skills,
+certifications, languages, identifiers, dates, descriptions, and source links;
+section counts are summaries rather than the only visible detail.
 Fields outside the current direct-HTTP contract—such as professional email,
 company industry, follower counts, and connection degree—remain unavailable
 rather than being inferred.

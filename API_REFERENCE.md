@@ -11,6 +11,52 @@ credentials never appear in response or validation-error bodies.
 Profiles run sequentially. A challenge or open circuit stops the remaining
 items and marks them explicitly as skipped.
 
+Request body:
+
+```json
+{
+  "urls": ["https://www.linkedin.com/in/example/"],
+  "session": {
+    "li_at": "<authorized session value>",
+    "jsessionid": "<authorized session value>",
+    "companion_cookies": "<optional cookie-name/value pairs>",
+    "user_agent": "<the same browser session User-Agent>",
+    "accept_language": "en-US,en;q=0.9"
+  }
+}
+```
+
+The normal response is an HTTP 200 envelope so every submitted URL has its own
+outcome:
+
+```json
+{
+  "request_id": "caller-supplied-or-generated-id",
+  "credential_handling": "request_memory_only",
+  "results": [
+    {
+      "input_url": "https://www.linkedin.com/in/example/",
+      "status": "succeeded",
+      "profile": {"schema_version": "1.2.0", "profile": {}},
+      "error": null
+    }
+  ]
+}
+```
+
+`status` is `succeeded`, `partial`, `failed`, or `skipped`. A syntactically
+valid request containing an invalid member URL still returns the HTTP 200
+envelope, but that item is `failed` with `error.code=INVALID_PROFILE_URL`. URL
+validation occurs before transport execution, so LinkedIn is not called for
+that item. A malformed request body (missing session fields, invalid field
+types, or more than 10 URLs) returns HTTP 422.
+
+Backend callers should keep all session values in environment variables or a
+secret manager, send a unique `X-Request-ID`, use a bounded timeout, and inspect
+both the HTTP status and each item status. Never embed session material in
+frontend JavaScript, URLs, logs, or source control. Live examples are also
+available in `/docs` and the machine-readable contract is `/openapi.json`.
+
 ## `GET /v1/profiles`
 
 This legacy operator route uses a backend-configured LinkedIn session. Query

@@ -67,6 +67,7 @@
               </div>
               <textarea id="profile-urls" rows="7" spellcheck="false" required placeholder="https://www.linkedin.com/in/profile-one/&#10;https://www.linkedin.com/in/profile-two/"></textarea>
               <p class="field-help">One public profile URL per line. Up to 10 profiles, processed sequentially.</p>
+              <div class="url-validation" id="url-validation" aria-live="polite"></div>
             </div>
 
             <div class="no-account-note">
@@ -129,6 +130,23 @@
             <span>Run extraction</span><span aria-hidden="true">↗</span>
           </button>
         </div>
+        <div class="extraction-progress" id="extraction-progress" role="status" aria-live="polite" hidden>
+          <div class="progress-heading">
+            <div>
+              <strong>Direct extraction is running</strong>
+              <span id="progress-message">Waiting for the first upstream response…</span>
+            </div>
+            <span class="progress-time" id="progress-time">0:00</span>
+          </div>
+          <progress aria-label="Profile extraction in progress"></progress>
+          <ol class="progress-contract">
+            <li><span>01</span> Validate and canonicalize profile URLs</li>
+            <li><span>02</span> Retrieve authorized profile evidence sequentially</li>
+            <li><span>03</span> Normalize fields and preserve missing values</li>
+            <li><span>04</span> Build JSON, CSV, and readable profile cards</li>
+          </ol>
+          <p>No progress percentage is invented: LinkedIn operations do not stream completion events.</p>
+        </div>
         <div class="form-error" id="form-error" role="alert" hidden></div>
       </form>
     </section>
@@ -147,6 +165,85 @@
       </div>
       <div class="run-summary" id="run-summary" aria-live="polite"></div>
       <div class="result-list" id="result-list"></div>
+    </section>
+
+    <section class="api-guide" id="api-guide" aria-labelledby="api-guide-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">BACKEND INTEGRATION</p>
+          <h2 id="api-guide-title">Use Profile Refinery as an API</h2>
+        </div>
+        <p class="api-intro">Call the request-scoped endpoint from your own backend. No Profile Refinery API key is required; your authorized LinkedIn session is carried in that single request and is never returned.</p>
+      </div>
+
+      <div class="api-endpoint">
+        <span class="method-badge">POST</span>
+        <code>https://profile-refinery-api.vercel.app/v1/session-extractions</code>
+        <a href="/docs">OpenAPI explorer</a>
+        <a href="/openapi.json">OpenAPI JSON</a>
+      </div>
+
+      <div class="api-grid">
+        <article class="api-card">
+          <div class="api-card-heading"><h3>Python backend</h3><button type="button" data-copy-target="python-example">Copy</button></div>
+          <pre><code id="python-example">import os
+import requests
+
+payload = {
+    "urls": ["https://www.linkedin.com/in/example/"],
+    "session": {
+        "li_at": os.environ["LINKEDIN_LI_AT"],
+        "jsessionid": os.environ["LINKEDIN_JSESSIONID"],
+        "companion_cookies": os.getenv("LINKEDIN_COOKIE"),
+        "user_agent": os.environ["LINKEDIN_USER_AGENT"],
+        "accept_language": "en-US,en;q=0.9",
+    },
+}
+
+response = requests.post(
+    "https://profile-refinery-api.vercel.app/v1/session-extractions",
+    json=payload,
+    headers={"X-Request-ID": "your-correlation-id"},
+    timeout=120,
+)
+response.raise_for_status()
+data = response.json()</code></pre>
+        </article>
+
+        <article class="api-card">
+          <div class="api-card-heading"><h3>Node.js backend</h3><button type="button" data-copy-target="node-example">Copy</button></div>
+          <pre><code id="node-example">const response = await fetch(
+  "https://profile-refinery-api.vercel.app/v1/session-extractions",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Request-ID": crypto.randomUUID(),
+    },
+    body: JSON.stringify({
+      urls: ["https://www.linkedin.com/in/example/"],
+      session: {
+        li_at: process.env.LINKEDIN_LI_AT,
+        jsessionid: process.env.LINKEDIN_JSESSIONID,
+        companion_cookies: process.env.LINKEDIN_COOKIE,
+        user_agent: process.env.LINKEDIN_USER_AGENT,
+        accept_language: "en-US,en;q=0.9",
+      },
+    }),
+  },
+);
+
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+const data = await response.json();</code></pre>
+        </article>
+      </div>
+
+      <div class="api-behavior-grid">
+        <article><span>HTTP 200 ENVELOPE</span><h3>Per-profile results</h3><p>Each item is <code>succeeded</code>, <code>partial</code>, <code>failed</code>, or <code>skipped</code>. An invalid URL becomes a failed item with <code>INVALID_PROFILE_URL</code>; it never reaches LinkedIn.</p></article>
+        <article><span>HTTP 422</span><h3>Invalid request body</h3><p>Missing session fields, more than 10 URLs, or malformed field types fail request validation without echoing secret values.</p></article>
+        <article><span>HTTP 429 / 5XX</span><h3>Typed operational errors</h3><p>Rate limits, challenges, session expiry, timeouts, and protocol drift remain explicit. Inspect each result’s <code>error.code</code> before retrying.</p></article>
+      </div>
+      <p class="api-security-note"><strong>Backend use only.</strong> Keep LinkedIn cookies in a secret manager or environment variables. Never embed them in browser JavaScript, mobile apps, logs, databases, URLs, or source control.</p>
     </section>
 
     <section class="field-ledger" aria-labelledby="ledger-title">
@@ -174,6 +271,38 @@
           <p>Professional email, company industry/website, follower and connection counts, connection degree, hiring badge, and mutual-connection URLs.</p>
         </article>
       </div>
+      <details class="field-catalog" open>
+        <summary>Field-by-field compatibility</summary>
+        <div class="field-table-wrap">
+          <table>
+            <thead><tr><th>Type</th><th>Description</th><th>Profile Refinery availability</th></tr></thead>
+            <tbody>
+              <tr><td>firstName / lastName</td><td>First and last name</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>linkedinHeadline</td><td>Profile headline</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>location</td><td>Profile top-card location</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>linkedinDescription</td><td>About/profile description</td><td><span class="availability direct">WHEN VISIBLE</span></td></tr>
+              <tr><td>linkedinProfileId / Slug / Urn</td><td>Canonical identifiers and member URN</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>linkedinProfileUrl / profileUrl</td><td>Canonical LinkedIn profile URL</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>profileImageUrl / backgroundImageUrl</td><td>Observed profile media URLs</td><td><span class="availability direct">WHEN VISIBLE</span></td></tr>
+              <tr><td>companyName / linkedinJobTitle</td><td>Current company and job title</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>linkedinJobDateRange / Location / Description</td><td>Current-role dates, location, workplace type, and description</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>previousCompanyName / previous job fields</td><td>Previous company, title, dates, location, and description</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>linkedinCompanyUrl / CompanySlug</td><td>Company URL and slug derived from that URL</td><td><span class="availability derived">DIRECT + DERIVED</span></td></tr>
+              <tr><td>linkedinSchoolName / Degree / FieldOfStudy</td><td>School, degree, study field, dates, grade, activities, and description</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>linkedinSchoolUrl / CompanySlug</td><td>School URL and slug derived from that URL</td><td><span class="availability derived">DIRECT + DERIVED</span></td></tr>
+              <tr><td>linkedinSkillsLabel</td><td>All observed skills, plus structured skill records</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>certifications / languages</td><td>Structured certification and language records</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>refreshedAt</td><td>Profile observation timestamp</td><td><span class="availability direct">DIRECT</span></td></tr>
+              <tr><td>companyIndustry / companyWebsite</td><td>Company industry and website</td><td><span class="availability unavailable">NOT RETURNED</span></td></tr>
+              <tr><td>connectionDegree / connectionsUrl</td><td>Connection relationship and connections URL</td><td><span class="availability unavailable">NOT RETURNED</span></td></tr>
+              <tr><td>linkedinConnectionsCount / FollowersCount</td><td>Connection and follower counts</td><td><span class="availability unavailable">NOT RETURNED</span></td></tr>
+              <tr><td>linkedinIsHiringBadge / IsOpenToWorkBadge</td><td>Hiring and open-to-work badges</td><td><span class="availability unavailable">NOT RETURNED</span></td></tr>
+              <tr><td>mutualConnectionsUrl</td><td>Mutual-connections URL</td><td><span class="availability unavailable">NOT RETURNED</span></td></tr>
+              <tr><td>professionalEmail</td><td>Professional email discovery</td><td><span class="availability unavailable">NOT RETURNED</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
     </section>
   </main>
 

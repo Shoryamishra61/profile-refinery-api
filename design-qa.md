@@ -6,11 +6,11 @@
 - intended viewport: desktop dialog up to 1180px; responsive mobile layout below 620px
 - source pixels: 216 x 504 pixels as presented in the conversation
 - implementation pixels and density: unavailable because no browser surface was connected
-- state: successful normalized profile with profile image, location, and section evidence
+- state: successful normalized profile with profile image, location, and all returned sections expanded; invalid-URL and pending-extraction states are also in scope
 
 ## Full-view comparison evidence
 
-Blocked. The source visual was available in the conversation, but the local browser runtime reported no connected browser surfaces, so a browser-rendered implementation screenshot could not be captured or combined with the reference.
+Blocked. The source visual was available in the conversation, but the local browser runtime again reported an empty connected-browser list on August 30, 2026. A browser-rendered implementation screenshot could not be captured or combined with the reference.
 
 ## Focused-region comparison evidence
 
@@ -19,13 +19,14 @@ Blocked for the same reason. Code-level checks confirm the intended avatar, iden
 ## Findings
 
 - P0/P1/P2 visual differences: unverified until a browser-rendered screenshot can be compared with the source.
-- Functional validation completed: JavaScript syntax, public asset delivery assertions, semantic location replay, and responsive CSS rules.
-- Primary interactions requiring browser verification: open/close dialog, previous/next card, pointer tilt, details expansion, image loading under CSP, and HTML download.
+- Functional validation completed: JavaScript syntax, public asset delivery assertions, request-scoped invalid-URL transport sentinel, semantic location replay, accessible progress markup, full-detail card markup, and responsive CSS rules.
+- Primary interactions requiring browser verification: line-level URL feedback, extraction progress visibility and elapsed timer, code-copy feedback, open/close dialog, previous/next card, internal card scrolling, pointer tilt, image loading under CSP, and HTML download.
 - Console errors: unverified because no browser surface was available.
 
 ## Comparison history
 
 - Pass 1: blocked before comparison; no implementation screenshot was available. No visual fixes are claimed from this pass.
+- Pass 2: blocked again after the full-detail/loading/error implementation; browser discovery returned no connected browser surfaces. Code-level overflow constraints were added so the desktop detail panel scrolls while mobile uses document flow, but pixel correctness remains unverified.
 
 ## Final result
 

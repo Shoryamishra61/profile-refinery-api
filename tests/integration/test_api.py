@@ -332,9 +332,15 @@ async def test_extraction_desk_and_assets_are_public(client: httpx.AsyncClient) 
     assert "Request memory only" in page.text
     assert "View profile cards" in page.text
     assert 'id="profile-card-dialog"' in page.text
+    assert 'id="url-validation"' in page.text
+    assert "Direct extraction is running" in page.text
+    assert "Use Profile Refinery as an API" in page.text
+    assert "Field-by-field compatibility" in page.text
     assert "localStorage" not in script.text
     assert "View immersive card" in script.text
     assert "profile-card.html" in script.text
+    assert "validateProfileUrl" in script.text
+    assert "startProgress" in script.text
     assert "https://*.licdn.com" in page.headers["content-security-policy"]
     assert stylesheet.status_code == 200
     assert script.status_code == 200
@@ -381,6 +387,35 @@ async def test_request_scoped_session_extracts_without_echoing_secrets(
     assert len(captured_settings) == 1
     assert captured_settings[0].linkedin_li_at.get_secret_value() == sentinel_li_at
     assert captured_settings[0].linkedin_jsessionid.get_secret_value() == sentinel_jsession
+
+
+@pytest.mark.asyncio
+async def test_request_scoped_invalid_url_is_failed_without_transport(
+    client: httpx.AsyncClient,
+    stub_transport: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        api_module,
+        "Runtime",
+        lambda settings: RealRuntime(settings, transport=stub_transport),
+    )
+    response = await client.post(
+        "/v1/session-extractions",
+        json={
+            "urls": ["https://linkedin.com.evil.test/in/not-a-member"],
+            "session": {
+                "li_at": REQUEST_LI_AT_SENTINEL,
+                "jsessionid": REQUEST_JSESSION_SENTINEL,
+                "user_agent": "Mozilla/5.0 request-scoped test browser",
+            },
+        },
+    )
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "INVALID_PROFILE_URL"
+    assert stub_transport.call_count == 0
 
 
 @pytest.mark.asyncio
