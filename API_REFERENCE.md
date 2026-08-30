@@ -1,5 +1,19 @@
 # API Reference
 
+## `POST /v1/link-discovery`
+
+Public multipart endpoint for pasted `text` and multiple `files`. Supported file
+types are TXT, CSV, JSON, XLSX, DOCX, and PDF, detected by content. It performs
+no LinkedIn request and accepts no session credentials. The response contains
+canonical, deduplicated profile URLs and occurrence provenance, plus preserved
+post URLs and explicit skipped-input reasons. The default unique-profile limit
+is 200 and the default per-file limit is 5 MiB.
+
+Post URLs currently carry
+`resolution.code=POST_AUTHOR_RESOLUTION_UNAVAILABLE`. This is deliberate: there
+is no captured authenticated response contract proving the author mapping, so
+the service does not infer an identity from human-readable URL text.
+
 ## `POST /v1/session-extractions`
 
 The public extraction-desk route accepts 1–10 LinkedIn profile URLs plus an
@@ -10,6 +24,11 @@ credentials never appear in response or validation-error bodies.
 
 Profiles run sequentially. A challenge or open circuit stops the remaining
 items and marks them explicitly as skipped.
+
+The 10-URL limit is per request, not the extraction-desk job limit. The web desk
+discovers up to 200 unique profiles and sends sequential groups of 10, with a
+short pause between groups. It stops all later groups after an upstream
+challenge or open circuit.
 
 Request body:
 
@@ -56,6 +75,14 @@ secret manager, send a unique `X-Request-ID`, use a bounded timeout, and inspect
 both the HTTP status and each item status. Never embed session material in
 frontend JavaScript, URLs, logs, or source control. Live examples are also
 available in `/docs` and the machine-readable contract is `/openapi.json`.
+
+## `POST /v1/session-exports/xlsx`
+
+Accepts a `SessionExtractionResponse` containing normalized results and returns
+a workbook with `profiles`, `experience`, `education`, `skills`,
+`certifications`, `languages`, `provenance`, and `failures` sheets. It accepts
+no credentials and makes no LinkedIn request. Formula-like cell values are
+stored as text.
 
 ## `GET /v1/profiles`
 

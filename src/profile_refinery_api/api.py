@@ -4,14 +4,22 @@ import hmac
 import json
 import uuid
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request, Security, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Query, Request, Security, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 
+from .batch import ingest as batch_ingest
+from .batch.discovery import (
+    dedupe,
+    dedupe_posts,
+    discover_in_text,
+    discover_posts_in_text,
+)
+from .batch.exports import flatten, xlsx_bytes
 from .batch.service import BatchService
 from .canonicalizer import canonicalize_profile_url
 from .errors import (
@@ -144,6 +152,108 @@ def build_router(runtime: Runtime) -> APIRouter:
                 "Content-Disposition": "inline",
                 "X-Content-Type-Options": "nosniff",
             },
+        )
+
+    @router.post("/v1/link-discovery", tags=["profiles"])
+    async def link_discovery(
+        request: Request,
+        text: Annotated[str | None, Form(max_length=1_000_000)] = None,
+        files: list[UploadFile] | None = None,
+    ) -> JSONResponse:
+        """Discover supported LinkedIn links without using session material."""
+
+        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+        peer = request.client.host if request.client else "unknown"
+        retry_after = limiter.check(f"discovery:{forwarded or peer}")
+        if retry_after is not None:
+            raise CallerRateLimited(retry_after)
+
+        profile_occurrences = discover_in_text(text or "", "pasted_text")
+        post_occurrences = discover_posts_in_text(text or "", "pasted_text")
+        skipped_inputs: list[dict[str, str]] = []
+        max_bytes = runtime.settings.app_batch_max_file_bytes
+        for upload in files or []:
+            name = batch_ingest.sanitize_filename(upload.filename)
+            payload = await upload.read(max_bytes + 1)
+            if len(payload) > max_bytes:
+                skipped_inputs.append({"source_name": name, "reason": "file_too_large"})
+                continue
+            try:
+                discovered = batch_ingest.ingest_links(payload, name, name)
+            except batch_ingest.IngestError as exc:
+                skipped_inputs.append({"source_name": name, "reason": exc.detail})
+                continue
+            profile_occurrences.extend(discovered.profiles)
+            post_occurrences.extend(discovered.posts)
+
+        profiles = dedupe(profile_occurrences)
+        posts = dedupe_posts(post_occurrences)
+        limit = runtime.settings.app_batch_max_urls
+        overflow_profiles = profiles[limit:]
+        overflow_posts = posts[limit:]
+        for profile_item in overflow_profiles:
+            skipped_inputs.append(
+                {
+                    "source_name": profile_item.canonical.canonical_url,
+                    "reason": "batch_url_limit",
+                }
+            )
+        for post_item in overflow_posts:
+            skipped_inputs.append(
+                {"source_name": post_item.canonical_url, "reason": "post_url_limit"}
+            )
+        profiles = profiles[:limit]
+        posts = posts[:limit]
+        profile_occurrence_count = sum(len(item.occurrences) for item in profiles)
+        post_occurrence_count = sum(len(item.occurrences) for item in posts)
+        return JSONResponse(
+            {
+                "profiles": [
+                    {
+                        "canonical_url": item.canonical.canonical_url,
+                        "vanity_slug": item.canonical.slug,
+                        "occurrences": [occurrence.as_dict() for occurrence in item.occurrences],
+                    }
+                    for item in profiles
+                ],
+                "posts": [
+                    {
+                        "canonical_url": item.canonical_url,
+                        "activity_urn": item.activity_urn,
+                        "occurrences": [occurrence.as_dict() for occurrence in item.occurrences],
+                        "resolution": {
+                            "status": "unresolved",
+                            "code": "POST_AUTHOR_RESOLUTION_UNAVAILABLE",
+                            "detail": (
+                                "No captured authenticated post response currently proves "
+                                "the canonical author profile. The URL was preserved without guessing."
+                            ),
+                        },
+                    }
+                    for item in posts
+                ],
+                "statistics": {
+                    "profile_occurrences_discovered": profile_occurrence_count,
+                    "unique_profiles": len(profiles),
+                    "post_occurrences_discovered": post_occurrence_count,
+                    "unique_posts": len(posts),
+                    "duplicates_removed": max(
+                        0,
+                        len(profile_occurrences)
+                        + len(post_occurrences)
+                        - len(profiles)
+                        - len(posts),
+                    ),
+                },
+                "skipped_inputs": skipped_inputs,
+                "limits": {
+                    "max_unique_profiles": limit,
+                    "max_file_bytes": max_bytes,
+                    "accepted_file_types": ["txt", "csv", "json", "xlsx", "docx", "pdf"],
+                    "extraction_chunk_size": 10,
+                },
+            },
+            headers={"Cache-Control": "no-store"},
         )
 
     @router.get("/healthz", tags=["operations"])
@@ -328,6 +438,62 @@ def build_router(runtime: Runtime) -> APIRouter:
                 "Cache-Control": "no-store, max-age=0",
                 "Pragma": "no-cache",
                 "X-Credential-Handling": "request-memory-only",
+            },
+        )
+
+    @router.post(
+        "/v1/session-exports/xlsx",
+        tags=["profiles"],
+        response_class=Response,
+    )
+    async def session_xlsx_export(body: SessionExtractionResponse) -> Response:
+        """Render an already extracted public response as a multi-sheet workbook.
+
+        This endpoint receives normalized profile data only. It accepts no session
+        material and performs no LinkedIn request.
+        """
+
+        rows: list[dict[str, Any]] = []
+        sections_by_url: dict[str, dict[str, list[dict[str, Any]]]] = {}
+        failures: list[dict[str, Any]] = []
+        for result in body.results:
+            if result.profile is None:
+                row = flatten(None, result.status, result.error.code if result.error else None)
+                row["linkedin_url"] = result.input_url
+                rows.append(row)
+                failures.append(
+                    {
+                        "linkedin_url": result.input_url,
+                        "status": result.status,
+                        "error_code": result.error.code if result.error else None,
+                        "error_detail": result.error.detail if result.error else None,
+                    }
+                )
+                continue
+            response = result.profile.model_dump(mode="json")
+            rows.append(flatten(response, result.status, None))
+            profile = response["profile"]
+            sections_by_url[result.profile.canonical_url] = {
+                section: list(profile[section]["value"] or [])
+                for section in (
+                    "experience",
+                    "education",
+                    "skills",
+                    "certifications",
+                    "languages",
+                )
+            }
+        workbook = xlsx_bytes(rows, sections_by_url=sections_by_url, failures=failures)
+        return Response(
+            workbook,
+            media_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+            headers={
+                "Cache-Control": "no-store, max-age=0",
+                "Content-Disposition": (
+                    'attachment; filename="profile-refinery-profiles.xlsx"'
+                ),
             },
         )
 

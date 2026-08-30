@@ -128,6 +128,15 @@ textarea[aria-invalid="true"] { border-color: var(--rust); box-shadow: 4px 4px 0
 .form-error strong { display: block; margin-bottom: .35rem; font: 700 .76rem var(--mono); text-transform: uppercase; }
 .form-error ul { margin: .5rem 0 0; padding-left: 1.25rem; font-weight: 400; }
 
+.file-drop-zone { display: grid; gap: .45rem; margin: 1rem; padding: 1.35rem; border: 2px dashed var(--blue); background: #edf2ff; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.file-drop-zone:hover, .file-drop-zone:focus-within, .file-drop-zone.dragging { border-color: var(--ink); background: var(--signal); }
+.file-drop-zone input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.file-drop-zone .drop-kicker { color: var(--blue); font: 700 .64rem var(--mono); letter-spacing: .08em; }
+.file-drop-zone strong { font: 400 1.35rem var(--serif); }
+.file-drop-zone small { color: var(--muted); line-height: 1.5; }
+.selected-files { display: flex; flex-wrap: wrap; gap: .45rem; margin: 0 1rem 1rem; }
+.selected-files span { padding: .4rem .55rem; border: 1px solid var(--rule); background: white; font: .64rem var(--mono); overflow-wrap: anywhere; }
+
 .extraction-progress { padding: 1.3rem 1.5rem; border-top: 1px solid var(--ink); color: var(--paper); background: var(--blue); }
 .progress-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
 .progress-heading strong { display: block; color: var(--signal); font: 700 .8rem var(--mono); letter-spacing: .05em; text-transform: uppercase; }
@@ -166,6 +175,13 @@ textarea[aria-invalid="true"] { border-color: var(--rust); box-shadow: 4px 4px 0
 .error-detail { margin: 1rem 0 0; padding: 1rem; border-left: 4px solid var(--rust); background: #f6ded5; }
 .operation-line { margin: 1rem 0 0; color: var(--muted); font: .7rem var(--mono); overflow-wrap: anywhere; }
 .result-actions { display: flex; margin-top: 1rem; }
+.discovery-summary { margin-bottom: 1rem; padding: 1rem 1.2rem; border: 1px solid var(--ink); border-left: 6px solid var(--blue); background: #edf2ff; }
+.discovery-summary > strong { display: block; color: var(--blue); font: 700 .68rem var(--mono); }
+.discovery-summary > span { display: block; margin-top: .4rem; }
+.discovery-summary details { margin-top: .8rem; }
+.discovery-summary summary { cursor: pointer; font-weight: 700; }
+.discovery-summary li { margin-top: .5rem; overflow-wrap: anywhere; }
+.discovery-summary code { color: var(--rust); font-size: .7rem; }
 .view-card-button { padding: .65rem .9rem; border: 1px solid var(--ink); color: white; background: var(--blue); font: 700 .68rem var(--mono); text-transform: uppercase; cursor: pointer; }
 .view-card-button:hover, .view-card-button:focus-visible { color: var(--ink); background: var(--signal); }
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import json
 
 import httpx
+import openpyxl
 import pytest
 from conftest import FULL_PROFILE_FIXTURE
 
@@ -17,6 +19,71 @@ from profile_refinery_api.runtime import Runtime as RealRuntime
 
 REQUEST_LI_AT_SENTINEL = "request-only-" + "li-at-sentinel-value"
 REQUEST_JSESSION_SENTINEL = "ajax:" + "request-only-jsession"
+
+
+@pytest.mark.asyncio
+async def test_public_link_discovery_accepts_files_dedupes_and_never_calls_linkedin(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    pasted = (
+        "https://www.linkedin.com/in/one-person/\n"
+        "https://www.linkedin.com/feed/update/urn:li:activity:7471183910043922432"
+    )
+    uploaded = (
+        b"profile,post\n"
+        b"https://linkedin.com/in/one-person?trk=copy,"
+        b"https://www.linkedin.com/posts/author_slug_activity-7471183910043922432-x\n"
+        b"https://www.linkedin.com/in/two-person/,\n"
+    )
+    response = await client.post(
+        "/v1/link-discovery",
+        data={"text": pasted},
+        files={"files": ("people.csv", uploaded, "text/csv")},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["canonical_url"] for item in body["profiles"]] == [
+        "https://www.linkedin.com/in/one-person",
+        "https://www.linkedin.com/in/two-person",
+    ]
+    assert len(body["profiles"][0]["occurrences"]) == 2
+    assert body["statistics"] == {
+        "profile_occurrences_discovered": 3,
+        "unique_profiles": 2,
+        "post_occurrences_discovered": 2,
+        "unique_posts": 2,
+        "duplicates_removed": 1,
+    }
+    assert body["posts"][0]["resolution"]["code"] == (
+        "POST_AUTHOR_RESOLUTION_UNAVAILABLE"
+    )
+    assert body["limits"]["extraction_chunk_size"] == 10
+    assert response.headers["cache-control"] == "no-store"
+    assert stub_transport.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_link_discovery_is_public_in_openapi(client: httpx.AsyncClient) -> None:
+    document = (await client.get("/openapi.json")).json()
+    assert "security" not in document["paths"]["/v1/link-discovery"]["post"]
+
+
+@pytest.mark.asyncio
+async def test_link_discovery_accepts_more_than_ten_profiles_without_transport(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    text = "\n".join(
+        f"https://www.linkedin.com/in/profile-{index}/" for index in range(1, 13)
+    )
+    response = await client.post("/v1/link-discovery", data={"text": text})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["statistics"]["unique_profiles"] == 12
+    assert body["limits"]["max_unique_profiles"] == 200
+    assert body["limits"]["extraction_chunk_size"] == 10
+    assert stub_transport.call_count == 0
 
 
 @pytest.mark.asyncio
@@ -339,7 +406,11 @@ async def test_extraction_desk_and_assets_are_public(client: httpx.AsyncClient) 
     assert "localStorage" not in script.text
     assert "View immersive card" in script.text
     assert "profile-card.html" in script.text
-    assert "validateProfileUrl" in script.text
+    assert "/v1/link-discovery" in script.text
+    assert "post.resolution?.code" in script.text
+    assert "/v1/session-exports/xlsx" in script.text
+    assert 'id="file-drop-zone"' in page.text
+    assert 'id="download-xlsx"' in page.text
     assert "startProgress" in script.text
     assert "normalizeMediaUrl" in script.text
     assert "mediaProxyUrl" in script.text
@@ -451,6 +522,51 @@ async def test_request_scoped_session_extracts_without_echoing_secrets(
     assert len(captured_settings) == 1
     assert captured_settings[0].linkedin_li_at.get_secret_value() == sentinel_li_at
     assert captured_settings[0].linkedin_jsessionid.get_secret_value() == sentinel_jsession
+
+
+@pytest.mark.asyncio
+async def test_public_xlsx_export_uses_normalized_results_without_transport(
+    client: httpx.AsyncClient,
+    stub_transport: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        api_module,
+        "Runtime",
+        lambda settings: RealRuntime(settings, transport=stub_transport),
+    )
+    extracted = await client.post(
+        "/v1/session-extractions",
+        json={
+            "urls": ["https://www.linkedin.com/in/test-integration-profile/"],
+            "session": {
+                "li_at": REQUEST_LI_AT_SENTINEL,
+                "jsessionid": REQUEST_JSESSION_SENTINEL,
+                "user_agent": "Mozilla/5.0 request-scoped test browser",
+            },
+        },
+    )
+    calls_after_extraction = stub_transport.call_count
+    response = await client.post("/v1/session-exports/xlsx", json=extracted.json())
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-disposition"].endswith(
+        'filename="profile-refinery-profiles.xlsx"'
+    )
+    workbook = openpyxl.load_workbook(io.BytesIO(response.content), read_only=True)
+    assert workbook.sheetnames == [
+        "profiles",
+        "experience",
+        "education",
+        "skills",
+        "certifications",
+        "languages",
+        "provenance",
+        "failures",
+    ]
+    assert workbook["profiles"]["D2"].value == "Integration Check"
+    assert workbook["skills"].max_row == 3
+    assert stub_transport.call_count == calls_after_extraction
 
 
 @pytest.mark.asyncio

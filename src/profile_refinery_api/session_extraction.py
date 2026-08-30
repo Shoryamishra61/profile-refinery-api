@@ -61,4 +61,4 @@ class SessionExtractionResult(StrictModel):
 class SessionExtractionResponse(StrictModel):
     request_id: str
     credential_handling: Literal["request_memory_only"] = "request_memory_only"
-    results: list[SessionExtractionResult]
+    results: Annotated[list[SessionExtractionResult], Field(max_length=200)]

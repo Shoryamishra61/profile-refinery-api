@@ -34,7 +34,7 @@
       <div class="exchange" aria-label="Input and output summary">
         <div class="exchange-cell">
           <span class="exchange-index">01 / YOU GIVE</span>
-          <strong>Profile URLs</strong>
+          <strong>URLs, documents, spreadsheets</strong>
           <strong>LinkedIn session</strong>
           <strong>User-Agent</strong>
         </div>
@@ -43,7 +43,7 @@
           <span class="exchange-index">02 / YOU GET</span>
           <strong>Normalized profiles</strong>
           <strong>Evidence status</strong>
-          <strong>JSON + CSV + profile cards</strong>
+          <strong>JSON + CSV + XLSX + profile cards</strong>
         </div>
       </div>
     </section>
@@ -65,13 +65,21 @@
           <div class="input-column">
             <div class="field-block field-block-primary">
               <div class="field-heading">
-                <label for="profile-urls">LinkedIn profile URLs</label>
-                <span id="url-count">0 / 10</span>
+                <label for="profile-urls">LinkedIn source text</label>
+                <span id="url-count">0 detected</span>
               </div>
-              <textarea id="profile-urls" rows="7" spellcheck="false" required placeholder="https://www.linkedin.com/in/profile-one/&#10;https://www.linkedin.com/in/profile-two/"></textarea>
-              <p class="field-help">One public profile URL per line. Up to 10 profiles, processed sequentially.</p>
+              <textarea id="profile-urls" rows="7" spellcheck="false" placeholder="Paste profile links, post links, or text containing LinkedIn links…"></textarea>
+              <p class="field-help">Paste any text. Profile links are deduplicated; post links are preserved and never guessed.</p>
               <div class="url-validation" id="url-validation" aria-live="polite"></div>
             </div>
+
+            <label class="file-drop-zone" id="file-drop-zone" for="source-files">
+              <input id="source-files" type="file" multiple accept=".txt,.csv,.json,.xlsx,.docx,.pdf,text/plain,text/csv,application/json,application/pdf">
+              <span class="drop-kicker">DROP FILES HERE</span>
+              <strong>TXT, CSV, JSON, XLSX, DOCX, or PDF</strong>
+              <small>Choose multiple files · up to 5 MiB each · links retain file, row, sheet, cell, page, or offset provenance</small>
+            </label>
+            <div class="selected-files" id="selected-files" aria-live="polite"></div>
 
             <div class="no-account-note">
               <span aria-hidden="true">✓</span>
@@ -143,8 +151,8 @@
           </div>
           <progress aria-label="Profile extraction in progress"></progress>
           <ol class="progress-contract">
-            <li><span>01</span> Validate and canonicalize profile URLs</li>
-            <li><span>02</span> Retrieve authorized profile evidence sequentially</li>
+            <li><span>01</span> Discover and deduplicate links with provenance</li>
+            <li><span>02</span> Retrieve profiles in paced groups of 10</li>
             <li><span>03</span> Normalize fields and preserve missing values</li>
             <li><span>04</span> Build JSON, CSV, and readable profile cards</li>
           </ol>
@@ -164,6 +172,7 @@
           <button type="button" id="open-profile-cards">View profile cards</button>
           <button type="button" id="download-json">Download JSON</button>
           <button type="button" id="download-csv">Download CSV</button>
+          <button type="button" id="download-xlsx">Download XLSX</button>
         </div>
       </div>
       <div class="run-summary" id="run-summary" aria-live="polite"></div>
@@ -243,7 +252,7 @@ const data = await response.json();</code></pre>
 
       <div class="api-behavior-grid">
         <article><span>HTTP 200 ENVELOPE</span><h3>Per-profile results</h3><p>Each item is <code>succeeded</code>, <code>partial</code>, <code>failed</code>, or <code>skipped</code>. An invalid URL becomes a failed item with <code>INVALID_PROFILE_URL</code>; it never reaches LinkedIn.</p></article>
-        <article><span>HTTP 422</span><h3>Invalid request body</h3><p>Missing session fields, more than 10 URLs, or malformed field types fail request validation without echoing secret values.</p></article>
+        <article><span>HTTP 422</span><h3>Invalid request body</h3><p>Missing session fields, more than 10 URLs per API call, or malformed field types fail validation without echoing secret values. The web desk discovers up to 200 and sends sequential groups of 10.</p></article>
         <article><span>HTTP 429 / 5XX</span><h3>Typed operational errors</h3><p>Rate limits, challenges, session expiry, timeouts, and protocol drift remain explicit. Inspect each result’s <code>error.code</code> before retrying.</p></article>
       </div>
       <p class="api-security-note"><strong>Backend use only.</strong> Keep LinkedIn cookies in a secret manager or environment variables. Never embed them in browser JavaScript, mobile apps, logs, databases, URLs, or source control.</p>

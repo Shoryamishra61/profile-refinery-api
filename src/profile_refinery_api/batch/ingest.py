@@ -6,12 +6,25 @@ import json
 import logging
 import re
 import zipfile
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from defusedxml import ElementTree
 
-from .discovery import Occurrence, discover_in_text
+from .discovery import Occurrence, discover_in_text, discover_posts_in_text
+
+ProfileFinding = tuple[str, Occurrence]
+PostFinding = tuple[str, str | None, Occurrence]
+
+
+@dataclass(slots=True)
+class IngestedLinks:
+    profiles: list[ProfileFinding] = field(default_factory=list)
+    posts: list[PostFinding] = field(default_factory=list)
+
+    def extend(self, other: IngestedLinks) -> None:
+        self.profiles.extend(other.profiles)
+        self.posts.extend(other.posts)
 
 
 class IngestError(Exception):
@@ -58,6 +71,12 @@ def ingest(payload: bytes, filename: str, source_name: str) -> list[tuple[str, O
     line/paragraph/page numbers for text-like formats, sheet/cell for XLSX and
     the JSON key path for structured documents.
     """
+    return ingest_links(payload, filename, source_name).profiles
+
+
+def ingest_links(payload: bytes, filename: str, source_name: str) -> IngestedLinks:
+    """Discover profile and post URLs in one bounded parse of an uploaded file."""
+
     kind = sniff_kind(payload, filename)
     if kind == "txt":
         return _ingest_text(payload.decode("utf-8"), source_name)
@@ -72,27 +91,34 @@ def ingest(payload: bytes, filename: str, source_name: str) -> list[tuple[str, O
     return _ingest_csv(payload.decode("utf-8-sig"), source_name)
 
 
-def _find(text: str, **place: Any) -> list[tuple[str, Occurrence]]:
-    return [
-        (url, replace(occurrence, **place))
-        for url, occurrence in discover_in_text(text, source_type="file")
-    ]
+def _find(text: str, **place: Any) -> IngestedLinks:
+    return IngestedLinks(
+        profiles=[
+            (url, replace(occurrence, **place))
+            for url, occurrence in discover_in_text(text, source_type="file")
+        ],
+        posts=[
+            (url, activity_urn, replace(occurrence, **place))
+            for url, activity_urn, occurrence in discover_posts_in_text(
+                text, source_type="file"
+            )
+        ],
+    )
 
 
-def _ingest_text(text: str, source_name: str) -> list[tuple[str, Occurrence]]:
-    findings: list[tuple[str, Occurrence]] = []
+def _ingest_text(text: str, source_name: str) -> IngestedLinks:
+    findings = IngestedLinks()
     for line_number, line in enumerate(text.splitlines(), start=1):
-        for url, occ in discover_in_text(line, "file"):
-            findings.append((url, replace(occ, source_name=source_name, row=line_number)))
+        findings.extend(_find(line, source_name=source_name, row=line_number))
     return findings
 
 
-def _ingest_json(text: str, source_name: str) -> list[tuple[str, Occurrence]]:
+def _ingest_json(text: str, source_name: str) -> IngestedLinks:
     try:
         document = json.loads(text)
     except (json.JSONDecodeError, ValueError):
         return _ingest_text(text, source_name)
-    findings: list[tuple[str, Occurrence]] = []
+    findings = IngestedLinks()
 
     def walk(value: Any, path: str, depth: int) -> None:
         if depth > 24:
@@ -104,15 +130,14 @@ def _ingest_json(text: str, source_name: str) -> list[tuple[str, Occurrence]]:
             for index, child in enumerate(value):
                 walk(child, f"{path}[{index}]", depth + 1)
         elif isinstance(value, str) and "linkedin.com/" in value.lower():
-            for url, occ in discover_in_text(value, "file"):
-                findings.append((url, replace(occ, source_name=source_name, column=path or None)))
+            findings.extend(_find(value, source_name=source_name, column=path or None))
 
     walk(document, "", 0)
     return findings
 
 
-def _ingest_csv(text: str, source_name: str) -> list[tuple[str, Occurrence]]:
-    findings: list[tuple[str, Occurrence]] = []
+def _ingest_csv(text: str, source_name: str) -> IngestedLinks:
+    findings = IngestedLinks()
     reader = csv.reader(io.StringIO(text))
     header: list[str] | None = None
     for row_number, row in enumerate(reader, start=1):
@@ -125,14 +150,13 @@ def _ingest_csv(text: str, source_name: str) -> list[tuple[str, Occurrence]]:
                 if column_index < len(header) and header[column_index].strip()
                 else f"column_{column_index + 1}"
             )
-            for url, occ in discover_in_text(cell, "file"):
-                findings.append(
-                    (url, replace(occ, source_name=source_name, row=row_number, column=column))
-                )
+            findings.extend(
+                _find(cell, source_name=source_name, row=row_number, column=column)
+            )
     return findings
 
 
-def _ingest_docx(payload: bytes, source_name: str) -> list[tuple[str, Occurrence]]:
+def _ingest_docx(payload: bytes, source_name: str) -> IngestedLinks:
     try:
         with zipfile.ZipFile(io.BytesIO(payload)) as archive:
             document = archive.read("word/document.xml")
@@ -143,17 +167,16 @@ def _ingest_docx(payload: bytes, source_name: str) -> list[tuple[str, Occurrence
     except ElementTree.ParseError as exc:
         raise IngestError("The DOCX XML is malformed.") from exc
     namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-    findings: list[tuple[str, Occurrence]] = []
+    findings = IngestedLinks()
     for paragraph_number, paragraph in enumerate(root.iter(f"{namespace}p"), start=1):
         text = "".join(node.text or "" for node in paragraph.iter(f"{namespace}t"))
         if "linkedin.com/" not in text.lower():
             continue
-        for url, occ in discover_in_text(text, "file"):
-            findings.append((url, replace(occ, source_name=source_name, row=paragraph_number)))
+        findings.extend(_find(text, source_name=source_name, row=paragraph_number))
     return findings
 
 
-def _ingest_pdf(payload: bytes, source_name: str) -> list[tuple[str, Occurrence]]:
+def _ingest_pdf(payload: bytes, source_name: str) -> IngestedLinks:
     try:
         from pypdf import PdfReader
     except ImportError as exc:  # pragma: no cover - dependency guard
@@ -167,7 +190,7 @@ def _ingest_pdf(payload: bytes, source_name: str) -> list[tuple[str, Occurrence]
         raise
     except Exception as exc:  # pypdf raises heterogeneous parse errors
         raise IngestError("The PDF could not be parsed.") from exc
-    findings: list[tuple[str, Occurrence]] = []
+    findings = IngestedLinks()
     for page_number, page in enumerate(pages, start=1):
         try:
             text = page.extract_text() or ""
@@ -178,12 +201,11 @@ def _ingest_pdf(payload: bytes, source_name: str) -> list[tuple[str, Occurrence]
             continue
         if "linkedin.com/" not in text.lower():
             continue
-        for url, occ in discover_in_text(text, "file"):
-            findings.append((url, replace(occ, source_name=source_name, row=page_number)))
+        findings.extend(_find(text, source_name=source_name, row=page_number))
     return findings
 
 
-def _ingest_xlsx(payload: bytes, source_name: str) -> list[tuple[str, Occurrence]]:
+def _ingest_xlsx(payload: bytes, source_name: str) -> IngestedLinks:
     try:
         import openpyxl
     except ImportError as exc:  # pragma: no cover - dependency guard
@@ -192,26 +214,22 @@ def _ingest_xlsx(payload: bytes, source_name: str) -> list[tuple[str, Occurrence
         workbook = openpyxl.load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
     except Exception as exc:
         raise IngestError("The XLSX workbook could not be parsed.") from exc
-    findings: list[tuple[str, Occurrence]] = []
+    findings = IngestedLinks()
     try:
         for sheet in workbook.worksheets[:20]:
             for row_number, row in enumerate(sheet.iter_rows(max_row=10_000), start=1):
                 for cell in row:
                     value = cell.value
                     if isinstance(value, str) and "linkedin.com/" in value.lower():
-                        for url, occ in discover_in_text(value, "file"):
-                            findings.append(
-                                (
-                                    url,
-                                    replace(
-                                        occ,
-                                        source_name=source_name,
-                                        sheet=sheet.title,
-                                        row=row_number,
-                                        column=cell.coordinate,
-                                    ),
-                                )
+                        findings.extend(
+                            _find(
+                                value,
+                                source_name=source_name,
+                                sheet=sheet.title,
+                                row=row_number,
+                                column=cell.coordinate,
                             )
+                        )
     finally:
         workbook.close()
     return findings

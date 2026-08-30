@@ -23,77 +23,54 @@
   const progressMessage = document.querySelector("#progress-message");
   const progressTime = document.querySelector("#progress-time");
   const urlValidation = document.querySelector("#url-validation");
+  const fileInput = document.querySelector("#source-files");
+  const dropZone = document.querySelector("#file-drop-zone");
+  const selectedFilesView = document.querySelector("#selected-files");
   let latestResponse = null;
+  let selectedFiles = [];
   let currentCardIndex = 0;
   let progressTimer = null;
 
   userAgentInput.value = navigator.userAgent;
 
-  const profileUrls = () => urlsInput.value
-    .split(/\r?\n/)
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  const validateProfileUrl = (rawValue) => {
-    const raw = String(rawValue || "").trim();
-    if (!raw) return "A LinkedIn profile URL is required.";
-    const normalized = /^(?:www\.)?linkedin\.com\//i.test(raw) ? `https://${raw}` : raw;
-    let parsed;
-    try {
-      parsed = new URL(normalized);
-    } catch {
-      return "The URL is malformed.";
-    }
-    if (parsed.protocol !== "https:") return "Only HTTPS URLs are accepted.";
-    if (parsed.username || parsed.password || (parsed.port && parsed.port !== "443")) {
-      return "Credentials and non-standard ports are not allowed.";
-    }
-    if (!["linkedin.com", "www.linkedin.com"].includes(parsed.hostname.toLowerCase())) {
-      return "Only linkedin.com member-profile URLs are accepted.";
-    }
-    if (parsed.hash) return "URL fragments are not accepted.";
-    let decodedPath;
-    try {
-      decodedPath = decodeURIComponent(parsed.pathname);
-    } catch {
-      return "The profile path contains invalid encoding.";
-    }
-    const segments = decodedPath.split("/").filter(Boolean);
-    const validSlug = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,98}[A-Za-z0-9])?$/;
-    if (segments.length !== 2 || segments[0] !== "in" || !validSlug.test(segments[1])) {
-      return "Expected a member URL shaped as linkedin.com/in/vanity-slug.";
-    }
-    if (decodedPath.includes("..") || /[\\@:]/.test(decodedPath)) {
-      return "The profile path contains prohibited characters.";
-    }
-    return null;
-  };
-
-  const validateProfileUrls = () => profileUrls().map((url, index) => ({
-    line: index + 1,
-    url,
-    error: validateProfileUrl(url),
-  }));
-
   const renderUrlValidation = () => {
-    const checks = validateProfileUrls();
-    urlCount.textContent = `${checks.length} / 10`;
-    const invalid = checks.filter((item) => item.error);
-    urlsInput.setAttribute("aria-invalid", invalid.length ? "true" : "false");
-    if (!checks.length) {
+    const matches = urlsInput.value.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/(?:in|posts|feed\/update)\//gi) || [];
+    urlCount.textContent = `${matches.length} detected`;
+    urlsInput.removeAttribute("aria-invalid");
+    if (!urlsInput.value.trim()) {
       urlValidation.textContent = "";
       urlValidation.className = "url-validation";
-    } else if (invalid.length) {
-      urlValidation.className = "url-validation invalid";
-      urlValidation.innerHTML = `<strong>${invalid.length} URL${invalid.length === 1 ? " needs" : "s need"} attention</strong><ul>${invalid.map((item) => `<li>Line ${item.line}: ${escapeHtml(item.error)}</li>`).join("")}</ul>`;
     } else {
       urlValidation.className = "url-validation valid";
-      urlValidation.textContent = `${checks.length} valid LinkedIn profile URL${checks.length === 1 ? "" : "s"}.`;
+      urlValidation.textContent = "The server will validate, canonicalize, deduplicate, and report every supported link.";
     }
-    return invalid;
   };
 
   urlsInput.addEventListener("input", renderUrlValidation);
+
+  const renderSelectedFiles = () => {
+    selectedFilesView.innerHTML = selectedFiles.length
+      ? selectedFiles.map((file) => `<span>${escapeHtml(file.name)} · ${(file.size / 1024).toFixed(1)} KiB</span>`).join("")
+      : "";
+  };
+
+  const acceptFiles = (files) => {
+    const keyed = new Map(selectedFiles.map((file) => [`${file.name}:${file.size}:${file.lastModified}`, file]));
+    [...files].forEach((file) => keyed.set(`${file.name}:${file.size}:${file.lastModified}`, file));
+    selectedFiles = [...keyed.values()];
+    renderSelectedFiles();
+  };
+
+  fileInput.addEventListener("change", () => acceptFiles(fileInput.files || []));
+  ["dragenter", "dragover"].forEach((name) => dropZone.addEventListener(name, (event) => {
+    event.preventDefault();
+    dropZone.classList.add("dragging");
+  }));
+  ["dragleave", "drop"].forEach((name) => dropZone.addEventListener(name, (event) => {
+    event.preventDefault();
+    dropZone.classList.remove("dragging");
+  }));
+  dropZone.addEventListener("drop", (event) => acceptFiles(event.dataTransfer?.files || []));
 
   document.querySelectorAll("[data-reveal]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -420,7 +397,15 @@
       <div class="metric"><span>Partial</span><strong>${partial}</strong></div>
       <div class="metric"><span>Failed / skipped</span><strong>${failed + results.filter((item) => item.status === "skipped").length}</strong></div>`;
 
-    resultList.innerHTML = results.map((result, index) => {
+    const discovery = payload.discovery;
+    const discoveryNotice = discovery ? `<aside class="discovery-summary">
+      <strong>LINK DISCOVERY</strong>
+      <span>${escapeHtml(discovery.statistics?.unique_profiles || 0)} unique profiles · ${escapeHtml(discovery.statistics?.duplicates_removed || 0)} duplicates removed · ${escapeHtml(discovery.statistics?.unique_posts || 0)} post links preserved</span>
+      ${discovery.posts?.length ? `<details><summary>Post links requiring author resolution (${discovery.posts.length})</summary><ul>${discovery.posts.map((post) => `<li><a href="${escapeHtml(post.canonical_url)}" target="_blank" rel="noreferrer">${escapeHtml(post.canonical_url)}</a><br><code>${escapeHtml(post.resolution?.code)}</code> — no author was guessed.</li>`).join("")}</ul></details>` : ""}
+      ${discovery.skipped_inputs?.length ? `<details><summary>Skipped inputs (${discovery.skipped_inputs.length})</summary><ul>${discovery.skipped_inputs.map((item) => `<li>${escapeHtml(item.source_name)} — ${escapeHtml(item.reason)}</li>`).join("")}</ul></details>` : ""}
+    </aside>` : "";
+
+    resultList.innerHTML = discoveryNotice + results.map((result, index) => {
       const profile = result.profile;
       const name = fieldValue(profile, "name", result.error?.title || "Not extracted");
       const className = result.status === "succeeded" ? "good" : result.status === "partial" ? "partial" : "failed";
@@ -480,7 +465,9 @@
     form.setAttribute("aria-busy", "true");
     submitButton.disabled = true;
     submitButton.textContent = "Extracting profiles…";
-    progressMessage.textContent = `Processing ${count} profile${count === 1 ? "" : "s"}. The server reports results only when the request completes.`;
+    progressMessage.textContent = count
+      ? `Processing ${count} profile${count === 1 ? "" : "s"}. The server reports results only when each request completes.`
+      : "Discovering supported links and their source provenance.";
     progressTime.textContent = "0s elapsed";
     progressTimer = window.setInterval(() => {
       progressTime.textContent = `${Math.floor((Date.now() - startedAt) / 1000)}s elapsed`;
@@ -505,6 +492,26 @@
     const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
     const csv = [headers.map(csvCell).join(","), ...rows.map((row) => headers.map((key) => csvCell(row[key])).join(","))].join("\r\n");
     download("profile-refinery-profiles.csv", csv, "text/csv;charset=utf-8");
+  });
+  document.querySelector("#download-xlsx").addEventListener("click", async () => {
+    if (!latestResponse) return;
+    try {
+      const response = await fetch("/v1/session-exports/xlsx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        credentials: "same-origin",
+        body: JSON.stringify({
+          request_id: latestResponse.request_id,
+          credential_handling: latestResponse.credential_handling,
+          results: latestResponse.results,
+        }),
+      });
+      if (!response.ok) throw new Error(`XLSX export failed with HTTP ${response.status}.`);
+      download("profile-refinery-profiles.xlsx", await response.blob(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    } catch (error) {
+      renderFormError("XLSX export failed.", [error instanceof Error ? error.message : "The workbook could not be created."]);
+    }
   });
 
   document.querySelector("#open-profile-cards").addEventListener("click", () => showProfileCard(0));
@@ -570,70 +577,118 @@
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     formError.hidden = true;
-    const urls = profileUrls();
-    const invalid = renderUrlValidation();
-    if (!urls.length) {
-      renderFormError("Enter at least one LinkedIn profile URL.");
+    if (!urlsInput.value.trim() && !selectedFiles.length) {
+      renderFormError("Paste text or choose at least one supported file.");
       urlsInput.focus();
       return;
     }
-    if (urls.length > 10) {
-      renderFormError("A single extraction accepts at most 10 profiles.", [`Remove ${urls.length - 10} URL${urls.length - 10 === 1 ? "" : "s"} and try again.`]);
-      urlsInput.focus();
-      return;
-    }
-    if (invalid.length) {
-      renderFormError("Fix the invalid LinkedIn profile URLs before extraction.", invalid.map((item) => `Line ${item.line}: ${item.error}`));
-      urlsInput.focus();
-      return;
-    }
-    if (!form.reportValidity()) return;
 
-    const payload = JSON.stringify({
-      urls,
-      session: {
+    startProgress(0);
+    actionTitle.textContent = "Discovering links";
+    actionDetail.textContent = "Reading source text and files without contacting LinkedIn…";
+    let requestSession = null;
+    try {
+      const formData = new FormData();
+      if (urlsInput.value.trim()) formData.append("text", urlsInput.value);
+      selectedFiles.forEach((file) => formData.append("files", file, file.name));
+      const discoveryResponse = await fetch("/v1/link-discovery", {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        body: formData,
+      });
+      const discovery = await discoveryResponse.json();
+      if (!discoveryResponse.ok) throw new Error(discovery?.detail || `Link discovery failed with HTTP ${discoveryResponse.status}.`);
+      const urls = (discovery.profiles || []).map((item) => item.canonical_url);
+      if (!urls.length) {
+        latestResponse = {
+          request_id: crypto.randomUUID(),
+          credential_handling: "request_memory_only",
+          results: [],
+          discovery,
+        };
+        renderResults(latestResponse);
+        actionTitle.textContent = "Discovery complete";
+        actionDetail.textContent = discovery.posts?.length
+          ? "Post links were preserved, but no evidence-backed author profile could be resolved."
+          : "No supported LinkedIn profile links were found.";
+        return;
+      }
+      if (!form.reportValidity()) return;
+
+      requestSession = {
         li_at: liAtInput.value,
         jsessionid: jsessionInput.value,
         companion_cookies: companionInput.value || null,
         user_agent: userAgentInput.value,
         accept_language: languageInput.value,
-      },
-    });
-
-    startProgress(urls.length);
-    actionTitle.textContent = "Extraction in progress";
-    actionDetail.textContent = `Processing ${urls.length} profile${urls.length === 1 ? "" : "s"} sequentially…`;
-    try {
-      const responsePromise = fetch("/v1/session-extractions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Request-ID": crypto.randomUUID(),
-        },
-        cache: "no-store",
-        credentials: "same-origin",
-        body: payload,
-      });
+      };
       liAtInput.value = "";
       jsessionInput.value = "";
       companionInput.value = "";
-      const response = await responsePromise;
-      const contentType = response.headers.get("content-type") || "";
-      const data = contentType.includes("json") ? await response.json() : null;
-      if (!response.ok) {
-        const detail = typeof data?.detail === "string" ? data.detail : data?.title;
-        throw new Error(detail || `Request failed with HTTP ${response.status}.`);
+
+      actionTitle.textContent = "Extraction in progress";
+      actionDetail.textContent = `Processing ${urls.length} profile${urls.length === 1 ? "" : "s"} in sequential groups of 10…`;
+      const results = [];
+      const chunkSize = Number(discovery.limits?.extraction_chunk_size || 10);
+      let terminal = false;
+      for (let start = 0; start < urls.length; start += chunkSize) {
+        const chunk = urls.slice(start, start + chunkSize);
+        progressMessage.textContent = `Extracting profiles ${start + 1}–${Math.min(start + chunk.length, urls.length)} of ${urls.length}.`;
+        const response = await fetch("/v1/session-extractions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Request-ID": crypto.randomUUID(),
+          },
+          cache: "no-store",
+          credentials: "same-origin",
+          body: JSON.stringify({ urls: chunk, session: requestSession }),
+        });
+        const contentType = response.headers.get("content-type") || "";
+        const data = contentType.includes("json") ? await response.json() : null;
+        if (!response.ok) {
+          const detail = typeof data?.detail === "string" ? data.detail : data?.title;
+          throw new Error(detail || `Request failed with HTTP ${response.status}.`);
+        }
+        if (!data?.results) throw new Error("The server returned an unexpected response shape.");
+        results.push(...data.results);
+        terminal = data.results.some((item) => ["UPSTREAM_CHALLENGE", "UPSTREAM_CIRCUIT_OPEN"].includes(item.error?.code));
+        if (terminal) {
+          urls.slice(start + chunk.length).forEach((url) => results.push({
+            input_url: url,
+            status: "skipped",
+            profile: null,
+            error: {
+              code: "SKIPPED_AFTER_CHALLENGE",
+              title: "Extraction stopped",
+              detail: "No further profile was requested after LinkedIn returned a challenge or the circuit opened.",
+              status: 503,
+              retry_after_seconds: null,
+            },
+          }));
+          break;
+        }
+        if (start + chunk.length < urls.length) await new Promise((resolve) => window.setTimeout(resolve, 1200));
       }
-      if (!data?.results) throw new Error("The server returned an unexpected response shape.");
-      latestResponse = data;
-      renderResults(data);
+      Object.keys(requestSession).forEach((key) => { requestSession[key] = ""; });
+      latestResponse = {
+        request_id: crypto.randomUUID(),
+        credential_handling: "request_memory_only",
+        results,
+        discovery,
+      };
+      renderResults(latestResponse);
       actionTitle.textContent = "Extraction complete";
-      actionDetail.textContent = "Session fields were cleared. Download or review the structured output below.";
+      actionDetail.textContent = terminal
+        ? "Stopped safely after a typed upstream challenge. Unrequested profiles are marked skipped."
+        : "Session fields were cleared. Download or review the structured output below.";
     } catch (error) {
       renderFormError("Extraction request failed.", [error instanceof Error ? error.message : "The extraction request failed."]);
       actionTitle.textContent = "Extraction stopped";
       actionDetail.textContent = "Session fields were cleared. Review the error before trying again.";
     } finally {
+      if (requestSession) Object.keys(requestSession).forEach((key) => { requestSession[key] = ""; });
       stopProgress();
     }
   });

@@ -7,8 +7,21 @@ import zipfile
 import openpyxl
 import pytest
 
-from profile_refinery_api.batch.discovery import dedupe, discover_in_text
-from profile_refinery_api.batch.ingest import IngestError, ingest, sanitize_filename, sniff_kind
+from profile_refinery_api.batch.discovery import (
+    canonicalize_post_url,
+    dedupe,
+    dedupe_posts,
+    discover_in_text,
+    discover_posts_in_text,
+)
+from profile_refinery_api.batch.ingest import (
+    IngestError,
+    ingest,
+    ingest_links,
+    sanitize_filename,
+    sniff_kind,
+)
+from profile_refinery_api.errors import InvalidProfileUrl
 
 
 def minimal_pdf_with_text(text: str) -> bytes:
@@ -62,6 +75,49 @@ def test_ignores_non_profile_linkedin_urls() -> None:
     )
     found = discover_in_text(text, source_type="pasted_text")
     assert [url for url, _ in found] == ["https://www.linkedin.com/in/real-person"]
+
+
+def test_discovers_supported_post_urls_without_guessing_author() -> None:
+    text = (
+        "https://www.linkedin.com/posts/example-person_launch_activity-7471183910043922432-x "
+        "https://www.linkedin.com/feed/update/urn:li:activity:7471183910043922432/?trk=x"
+    )
+    found = discover_posts_in_text(text, "pasted_text")
+    assert [item[0] for item in found] == [
+        "https://www.linkedin.com/posts/example-person_launch_activity-7471183910043922432-x",
+        "https://www.linkedin.com/feed/update/urn:li:activity:7471183910043922432",
+    ]
+    assert found[0][1] is None
+    assert found[1][1] == "urn:li:activity:7471183910043922432"
+    assert found[0][2].offset == 0
+
+
+def test_post_urls_are_deduped_with_occurrence_provenance() -> None:
+    text = (
+        "https://www.linkedin.com/feed/update/urn:li:activity:7471183910043922432\n"
+        "https://linkedin.com/feed/update/urn:li:activity:7471183910043922432?trk=copy"
+    )
+    posts = dedupe_posts(discover_posts_in_text(text, "pasted_text"))
+    assert len(posts) == 1
+    assert len(posts[0].occurrences) == 2
+    assert posts[0].activity_urn == "urn:li:activity:7471183910043922432"
+
+
+def test_post_canonicalizer_rejects_non_post_surfaces() -> None:
+    with pytest.raises(InvalidProfileUrl):
+        canonicalize_post_url("https://www.linkedin.com/company/acme")
+
+
+def test_ingest_links_finds_profiles_and_posts_in_one_file() -> None:
+    payload = (
+        b"profile,post\n"
+        b"https://www.linkedin.com/in/file-person/,"
+        b"https://www.linkedin.com/feed/update/urn:li:activity:7471183910043922432"
+    )
+    links = ingest_links(payload, "links.csv", "links.csv")
+    assert links.profiles[0][0] == "https://www.linkedin.com/in/file-person"
+    assert links.posts[0][0].endswith("urn:li:activity:7471183910043922432")
+    assert links.posts[0][2].row == 2
 
 
 def test_invalid_slug_never_becomes_a_profile() -> None:

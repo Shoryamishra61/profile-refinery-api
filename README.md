@@ -111,7 +111,11 @@ section RSC requests -> semantic Flight parser -> schema 1.2.0
 ## API
 
 The deployment root is an extraction desk for request-scoped sessions. A caller
-submits up to 10 profile URLs, their current `li_at` and `JSESSIONID` cookie
+can paste text or drag multiple TXT, CSV, JSON, XLSX, DOCX, and PDF files into
+the page. The discovery stage finds and canonicalizes up to 200 unique profile
+URLs, removes cross-file duplicates while retaining occurrence provenance, and
+then submits sequential API groups of up to 10 profile URLs with the caller's
+current `li_at` and `JSESSIONID` cookie
 values, optional companion cookies, User-Agent, and Accept-Language. These
 values live only in the request's isolated runtime: they are not written to the
 job store, logged, cached, returned, or retained after the transport closes.
@@ -120,10 +124,13 @@ inputs immediately after submission. This is an alternative to configuring a
 shared LinkedIn session in the backend. No Profile Refinery account or product
 API key is required for this request-scoped route.
 
-The extraction desk rejects malformed or non-member URLs line by line before
-submission, shows an indeterminate elapsed-time progress state while direct
-extraction is pending, and explains typed per-profile failures without hiding
-them behind a generic error. The page also includes copy-ready Python and
+The extraction desk reports malformed/unsupported inputs without contacting
+LinkedIn, shows an elapsed-time progress state while direct extraction is
+pending, and explains typed per-profile failures without hiding them behind a
+generic error. LinkedIn post URLs are preserved with provenance, but remain
+`POST_AUTHOR_RESOLUTION_UNAVAILABLE` until a captured authenticated response
+proves a deterministic post-to-author contract; the page never guesses an
+author from a post slug. The page also includes copy-ready Python and
 Node.js backend examples plus links to `/docs` and `/openapi.json`.
 
 ```text
@@ -141,10 +148,12 @@ POST /v1/session-extractions
 }
 ```
 
-Profiles are processed sequentially. An upstream challenge or open circuit
-stops the remaining list; skipped entries are explicit and no alternate account,
-proxy rotation, browser, fixture, or replay is attempted. The web interface can
-download the returned normalized records as JSON, a safe flattened CSV, or a
+Profiles are processed sequentially. The JSON API accepts at most 10 per call;
+the web desk handles larger discovered sets as paced, sequential 10-item calls.
+An upstream challenge or open circuit stops the remaining list; skipped entries
+are explicit and no alternate account, proxy rotation, browser, fixture, or
+replay is attempted. The web interface can download the returned normalized
+records as JSON, a safe flattened CSV, a multi-sheet XLSX workbook, or a
 self-contained HTML profile card. It also renders an accessible responsive
 profile-card viewer with subtle pointer depth, reduced-motion support, and the
 full returned identity, overview, experience, education, skills,
@@ -184,10 +193,11 @@ Actual successful responses are validated against
 `schemas/profile-response.schema.json`. Empty arrays do not prove section
 extraction, and synthetic values are never reported as live evidence.
 
-## Offline batch, file, and export subsystem
+## Batch, file, and export subsystem
 
-The batch subsystem is independently verified with mocked/replay extractor data;
-this is `SYNTHETIC_UNIT`/non-live evidence and does not imply LinkedIn availability.
+File discovery and exports are deterministic local transforms and do not imply
+LinkedIn availability. Extraction still carries the evidence status of each
+actual normalized profile response.
 
 - Inputs: pasted text, TXT, CSV, JSON, XLSX, DOCX, and PDF.
 - Discovery: member URLs only, canonicalization, cross-file deduplication, and
@@ -201,6 +211,14 @@ this is `SYNTHETIC_UNIT`/non-live evidence and does not imply LinkedIn availabil
 - Exports: complete JSON records, deterministic flattened CSV, and XLSX sheets
   `profiles`, `experience`, `education`, `skills`, `certifications`, `languages`,
   `provenance`, and `failures`. CSV/XLSX formula-like cells are stored as text.
+
+Public routes used by the extraction desk:
+
+```text
+POST /v1/link-discovery       # multipart text/files; no LinkedIn request
+POST /v1/session-extractions  # 1-10 canonical profile URLs + request session
+POST /v1/session-exports/xlsx # normalized response only; no session or LinkedIn request
+```
 
 Endpoints:
 
