@@ -1,6 +1,6 @@
 # Reproducibility
 
-Python 3.12 dependencies are pinned by `uv.lock`. CI needs no LinkedIn credentials and never performs a live upstream request.
+Python 3.12 dependencies are pinned by `uv.lock`. Deterministic verification needs no LinkedIn credentials and never performs a live upstream request.
 
 ```bash
 git clone https://github.com/Shoryamishra61/profile-refinery-api.git

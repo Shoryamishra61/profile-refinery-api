@@ -5,7 +5,7 @@
   const urlsInput = document.querySelector("#profile-urls");
   const liAtInput = document.querySelector("#li-at");
   const jsessionInput = document.querySelector("#jsessionid");
-  const companionInput = document.querySelector("#companion-cookies");
+  const bcookieInput = document.querySelector("#bcookie");
   const userAgentInput = document.querySelector("#user-agent");
   const languageInput = document.querySelector("#accept-language");
   const submitButton = document.querySelector("#extract-button");
@@ -619,13 +619,13 @@
       requestSession = {
         li_at: liAtInput.value,
         jsessionid: jsessionInput.value,
-        companion_cookies: companionInput.value || null,
+        companion_cookies: bcookieInput.value ? `bcookie=${bcookieInput.value}` : null,
         user_agent: userAgentInput.value,
         accept_language: languageInput.value,
       };
       liAtInput.value = "";
       jsessionInput.value = "";
-      companionInput.value = "";
+      bcookieInput.value = "";
 
       actionTitle.textContent = "Extraction in progress";
       actionDetail.textContent = `Processing ${urls.length} profile${urls.length === 1 ? "" : "s"} in sequential groups of 10…`;

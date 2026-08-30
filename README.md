@@ -19,6 +19,20 @@ Rendered pages are a poor extraction contract: layout changes, virtualization, a
 
 The current protocol uses the `profileCardsActivity` SDUI component for core identity, then identity-scoped profile-card components for Experience, Education, Skills, Certifications, and Languages. An authenticated profile-page operation is available as a core fallback and bounded location-enrichment path.
 
+## Requirement coverage
+
+| Requirement | Implementation |
+|---|---|
+| Public HTTPS API | Deployed at `https://profile-refinery-api.vercel.app` |
+| Accept a LinkedIn profile URL | `GET /v1/profiles?url=…` and request-scoped `POST /v1/session-extractions` |
+| Return profile details | Strict schema covers name, headline, location, about, experience, education, skills, certifications, languages, profile image, and background image when available |
+| Backend credentials allowed | Operator-owned session can be supplied through deployment secrets; the public desk alternatively accepts an authorized request-scoped session |
+| Public complete source | `https://github.com/Shoryamishra61/profile-refinery-api` |
+| Setup, API, approach, limitations | This README plus `API_REFERENCE.md`, `ARCHITECTURE.md`, `REVERSE_ENGINEERING_METHOD.md`, and `LIMITATIONS.md` |
+| Secrets excluded | `.env`, cookies, HAR files, raw captures, and generated live results are ignored; release gates and `scripts/security_audit.py` scan tracked source |
+
+Fields are returned **when available to the authenticated viewer**. Absence, upstream failure, and parser drift are represented explicitly; the service never invents missing profile values.
+
 ## System shape
 
 ```text
@@ -65,6 +79,24 @@ Content-Type: application/json
 ```
 
 Each submitted URL receives an explicit `succeeded`, `partial`, `failed`, or `skipped` result. A challenge stops later requests for that session. Invalid URLs are rejected before transport execution.
+
+### What each session value means
+
+| Input | Significance | Input format |
+|---|---|---|
+| `li_at` | LinkedIn's primary signed-in session token. It authorizes authenticated profile requests and is the most sensitive input. | Value only, without `li_at=` |
+| `JSESSIONID` | Session identifier used by LinkedIn's CSRF contract. The transport derives the `csrf-token` header from this same cookie value. It must come from the same session as `li_at`. | Value only; surrounding quotes are accepted |
+| `bcookie` | Optional browser identifier that provides ordinary companion context. It does not authenticate the account and cannot replace `li_at`. | The web form accepts only the value after `bcookie=` |
+| User-Agent | Identifies the client software associated with the authorized session. The web form fills the current browser value automatically. | Complete User-Agent string |
+| Accept-Language | Preserves the request locale, which can affect localized profile text. | Standard header value such as `en-US,en;q=0.9` |
+
+The web interface deliberately asks for only one companion value, `bcookie`, instead of a congested raw-cookie field. Backend API clients may optionally send additional ordinary companion cookies through `companion_cookies` using Cookie-header syntax:
+
+```text
+bcookie=v=2&…; bscookie=v=1&…; liap=true
+```
+
+Do **not** repeat `li_at` or `JSESSIONID` inside `companion_cookies`. They already have authoritative dedicated fields. Duplicating them can create conflicting cookie values and, for `JSESSIONID`, desynchronize the cookie from the derived CSRF header. Request-scoped validation rejects those duplicates; the server-configured transport also excludes them when importing companion cookies.
 
 ## API surface
 
@@ -136,7 +168,7 @@ uv run python scripts/security_audit.py
 uv run pip-audit
 ```
 
-CI performs only deterministic offline verification. Test success and capture replay do not establish current LinkedIn availability. Production verification must be a controlled authorized call and must report only safe field counts and provenance.
+Automated release gates perform only deterministic offline verification. Test success and capture replay do not establish current LinkedIn availability. Production verification must be a controlled authorized call and must report only safe field counts and provenance.
 
 ## Research and operations documentation
 

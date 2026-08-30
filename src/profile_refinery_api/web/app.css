@@ -101,6 +101,9 @@ input, textarea {
 input:focus, textarea:focus { background: white; box-shadow: 4px 4px 0 var(--blue); }
 textarea { font-family: var(--mono); font-size: .86rem; }
 .field-help { margin: .5rem 0 0; color: var(--muted); font-size: .78rem; }
+.field-help strong { color: var(--ink); }
+.companion-block { margin-top: 2rem; padding: 1.15rem; border: 1px solid var(--rule); background: #f3f6ff; }
+.cookie-rule { margin: .8rem 0 0; padding: .7rem .8rem; border-left: 3px solid var(--blue); color: #36415c; background: white; font: .7rem/1.5 var(--mono); }
 .url-validation { min-height: 1.2rem; margin-top: .65rem; font: 700 .72rem var(--mono); }
 .url-validation.valid { color: #2e6813; }
 .url-validation.invalid { color: var(--rust); }

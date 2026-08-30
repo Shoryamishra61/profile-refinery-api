@@ -97,6 +97,7 @@
                 <input id="li-at" type="password" autocomplete="off" required minlength="20" placeholder="Value only — do not include li_at=">
                 <button class="reveal" type="button" data-reveal="li-at" aria-label="Show li_at cookie">SHOW</button>
               </div>
+              <p class="field-help"><strong>Authentication.</strong> This is LinkedIn’s primary signed-in session token and the most sensitive value here. Enter the value only.</p>
             </div>
 
             <div class="field-block">
@@ -105,15 +106,17 @@
                 <input id="jsessionid" type="password" autocomplete="off" required placeholder="ajax:… (quotes are accepted)">
                 <button class="reveal" type="button" data-reveal="jsessionid" aria-label="Show JSESSIONID cookie">SHOW</button>
               </div>
+              <p class="field-help"><strong>CSRF binding.</strong> It identifies the same browser session and supplies the matching <code>csrf-token</code> header. Use the value from the same session as <code>li_at</code>.</p>
             </div>
 
-            <div class="field-block">
-              <label for="companion-cookies">Companion cookies <span>recommended</span></label>
+            <div class="field-block companion-block">
+              <label for="bcookie">bcookie companion <span>optional</span></label>
               <div class="secret-control">
-                <input id="companion-cookies" type="password" autocomplete="off" spellcheck="false" placeholder="bcookie=…; bscookie=…; liap=true">
-                <button class="reveal" type="button" data-reveal="companion-cookies" aria-label="Show companion cookies">SHOW</button>
+                <input id="bcookie" type="password" autocomplete="off" spellcheck="false" placeholder="Value only — usually starts v=2&amp;">
+                <button class="reveal" type="button" data-reveal="bcookie" aria-label="Show bcookie value">SHOW</button>
               </div>
-              <p class="field-help">Cookie-header format. Do not repeat li_at or JSESSIONID here.</p>
+              <p class="field-help"><strong>Browser context.</strong> Optional device/browser identifier that can help LinkedIn interpret the session consistently. It is not a replacement for authentication.</p>
+              <p class="cookie-rule">Do not paste a full Cookie header. This field accepts only the value after <code>bcookie=</code>; the app constructs the header safely.</p>
             </div>
 
             <details class="advanced">

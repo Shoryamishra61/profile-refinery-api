@@ -38,12 +38,20 @@ Request body:
   "session": {
     "li_at": "<authorized session value>",
     "jsessionid": "<authorized session value>",
-    "companion_cookies": "<optional cookie-name/value pairs>",
+    "companion_cookies": "bcookie=<optional value>",
     "user_agent": "<the same browser session User-Agent>",
     "accept_language": "en-US,en;q=0.9"
   }
 }
 ```
+
+`li_at` is the primary authentication cookie. `JSESSIONID` is the matching
+session/CSRF value from which the transport derives `csrf-token`. Both are
+required and must come from the same authorized browser session. The optional
+`companion_cookies` string uses Cookie-header syntax and may carry ordinary
+context such as `bcookie`, `bscookie`, or `liap`; it must not repeat `li_at` or
+`JSESSIONID`. The web desk asks only for a value-only `bcookie` to keep this
+distinction clear.
 
 The normal response is an HTTP 200 envelope so every submitted URL has its own
 outcome:

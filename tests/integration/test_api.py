@@ -465,6 +465,11 @@ async def test_extraction_desk_and_assets_are_public(client: httpx.AsyncClient) 
     assert "View profile cards" in page.text
     assert 'id="profile-card-dialog"' in page.text
     assert 'id="url-validation"' in page.text
+    assert 'id="bcookie"' in page.text
+    assert 'id="companion-cookies"' not in page.text
+    assert "Browser context." in page.text
+    assert "CSRF binding." in page.text
+    assert "`bcookie=${bcookieInput.value}`" in script.text
     assert "Direct extraction is running" in page.text
     assert "Use Profile Refinery as an API" in page.text
     assert "Field-by-field compatibility" in page.text
@@ -799,6 +804,29 @@ async def test_request_validation_never_echoes_rejected_session_secret(
     assert rejected_secret not in response.text
     assert "private-tail" not in response.text
     assert response.headers["cache-control"].startswith("no-store")
+
+
+@pytest.mark.asyncio
+async def test_companion_cookies_cannot_duplicate_authoritative_session_cookies(
+    client: httpx.AsyncClient,
+) -> None:
+    duplicate = "bcookie=ordinary-context; JSESSIONID=must-not-override"
+    response = await client.post(
+        "/v1/session-extractions",
+        json={
+            "urls": ["https://www.linkedin.com/in/test-profile/"],
+            "session": {
+                "li_at": REQUEST_LI_AT_SENTINEL,
+                "jsessionid": REQUEST_JSESSION_SENTINEL,
+                "companion_cookies": duplicate,
+                "user_agent": "Mozilla/5.0 request-scoped test browser",
+            },
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "REQUEST_VALIDATION_ERROR"
+    assert duplicate not in response.text
+    assert "must-not-override" not in response.text
 
 
 @pytest.mark.asyncio

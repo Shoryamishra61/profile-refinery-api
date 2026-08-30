@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator
 
 from .models import ProfileResponse, StrictModel
 
@@ -25,9 +25,24 @@ class BrowserSessionInput(StrictModel):
 
     @field_validator("li_at", "jsessionid", "companion_cookies")
     @classmethod
-    def reject_cookie_control_characters(cls, value: SecretStr | None) -> SecretStr | None:
-        if value is not None and any(char in value.get_secret_value() for char in "\r\n\0"):
+    def reject_cookie_control_characters(
+        cls, value: SecretStr | None, info: ValidationInfo
+    ) -> SecretStr | None:
+        if value is None:
+            return value
+        secret = value.get_secret_value()
+        if any(char in secret for char in "\r\n\0"):
             raise ValueError("Cookie values cannot contain control characters.")
+        if info.field_name == "companion_cookies":
+            names = {
+                pair.strip().partition("=")[0].casefold()
+                for pair in secret.split(";")
+                if "=" in pair
+            }
+            if {"li_at", "jsessionid"}.intersection(names):
+                raise ValueError(
+                    "Companion cookies must not repeat li_at or JSESSIONID."
+                )
         return value
 
     @field_validator("user_agent", "accept_language")
