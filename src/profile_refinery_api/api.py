@@ -122,30 +122,58 @@ def build_router(runtime: Runtime) -> APIRouter:
         ):
             raise HTTPException(status_code=400, detail="Unsupported profile media URL.")
 
+        max_media_bytes = 5 * 1024 * 1024
         try:
             async with httpx.AsyncClient(
                 follow_redirects=False,
                 timeout=httpx.Timeout(10.0, connect=5.0),
             ) as client:
-                upstream = await client.get(
+                async with client.stream(
+                    "GET",
                     url,
                     headers={
                         "Accept": "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8",
                         "User-Agent": "Profile-Refinery-Media/1.0",
                     },
-                )
+                ) as upstream:
+                    if upstream.status_code != 200:
+                        raise HTTPException(
+                            status_code=502, detail="Profile image is unavailable."
+                        )
+                    media_type = (
+                        upstream.headers.get("content-type", "").split(";", 1)[0].lower()
+                    )
+                    if media_type not in {
+                        "image/jpeg",
+                        "image/png",
+                        "image/webp",
+                        "image/avif",
+                    }:
+                        raise HTTPException(
+                            status_code=502,
+                            detail="Profile media returned a non-image response.",
+                        )
+                    content_length = upstream.headers.get("content-length")
+                    if content_length and int(content_length) > max_media_bytes:
+                        raise HTTPException(
+                            status_code=502, detail="Profile image size is invalid."
+                        )
+                    content = bytearray()
+                    async for chunk in upstream.aiter_bytes():
+                        content.extend(chunk)
+                        if len(content) > max_media_bytes:
+                            raise HTTPException(
+                                status_code=502, detail="Profile image size is invalid."
+                            )
         except httpx.HTTPError as exc:
             raise HTTPException(status_code=502, detail="Profile image is unavailable.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=502, detail="Profile image size is invalid.") from exc
 
-        if upstream.status_code != 200:
-            raise HTTPException(status_code=502, detail="Profile image is unavailable.")
-        media_type = upstream.headers.get("content-type", "").split(";", 1)[0].lower()
-        if media_type not in {"image/jpeg", "image/png", "image/webp", "image/avif"}:
-            raise HTTPException(status_code=502, detail="Profile media returned a non-image response.")
-        if not upstream.content or len(upstream.content) > 5 * 1024 * 1024:
+        if not content:
             raise HTTPException(status_code=502, detail="Profile image size is invalid.")
         return Response(
-            content=upstream.content,
+            content=bytes(content),
             media_type=media_type,
             headers={
                 "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400",

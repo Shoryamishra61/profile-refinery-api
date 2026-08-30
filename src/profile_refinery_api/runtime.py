@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .config import AppMode, Settings
 from .errors import UpstreamAuthRequired, UpstreamOperationUnavailable
-from .governor import UpstreamGovernor
+from .governor import BreakerState, UpstreamGovernor
 from .operation_registry import OperationRegistry
 from .orchestrator import ProfileOrchestrator
 from .session import SessionProvider
@@ -47,6 +47,7 @@ class Runtime:
             and self.session.available
             and self._live_extraction_confirmed
             and self._live_failure_code is None
+            and self.governor.breaker.state is BreakerState.CLOSED
         )
 
     def extraction_capability(self) -> dict[str, object]:

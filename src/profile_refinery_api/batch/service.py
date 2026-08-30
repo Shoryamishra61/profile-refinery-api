@@ -112,7 +112,9 @@ class Batch:
 
     def status(self) -> BatchState:
         states = {job.state for job in self.jobs}
-        if not states or states == {JobState.PENDING}:
+        if not states:
+            return BatchState.FAILED
+        if states == {JobState.PENDING}:
             return BatchState.QUEUED
         if states == {JobState.SUCCEEDED}:
             return BatchState.SUCCEEDED
@@ -191,9 +193,7 @@ class BatchService:
         self._batches: dict[str, Batch] = {}
         self._idempotency: dict[str, str] = {}
         # Request coalescing: one in-flight extraction per deterministic job id.
-        self._inflight: dict[str, asyncio.Task[Any]] = {}
-        # Verified-success cache for coalescing concurrent duplicates.
-        self._completed: dict[str, ProfileResponse] = {}
+        self._inflight: dict[str, tuple[asyncio.Task[None], ProfileJob]] = {}
         self._lock = asyncio.Lock()
         self._restore()
 
@@ -253,7 +253,11 @@ class BatchService:
                     canonical=canonicalize_profile_url(item["canonical_url"]),
                     occurrences=[Occurrence(**occ) for occ in item.get("occurrences", [])],
                     job_id=item["job_id"],
-                    state=JobState(item.get("state", "PENDING")),
+                    state=(
+                        JobState.PENDING
+                        if JobState(item.get("state", "PENDING")) is JobState.RUNNING
+                        else JobState(item.get("state", "PENDING"))
+                    ),
                     attempts=item.get("attempts", 0),
                     error_code=item.get("error_code"),
                     error_detail=item.get("error_detail"),
@@ -400,39 +404,56 @@ class BatchService:
                         return
                     await self._execute_job(batch, job)
 
-            tasks = []
+            tasks: list[asyncio.Task[None]] = []
+            owned_job_ids: set[str] = set()
             for job in resumable:
-                task = None
+                task: asyncio.Task[None] | None = None
                 existing = self._inflight.get(job.job_id)
-                if existing is not None and not existing.done():
+                if existing is not None and not existing[0].done():
                     # Request coalescing: this profile is already being
                     # extracted elsewhere; share that result.
-                    task = asyncio.create_task(self._share(existing, job, batch))
-                elif job.job_id in self._completed:
-                    self._adopt(batch, job, self._completed[job.job_id])
+                    task = asyncio.create_task(
+                        self._share(existing[0], existing[1], job, batch)
+                    )
                 else:
                     task = asyncio.create_task(worker(job))
-                    self._inflight[job.job_id] = task
+                    self._inflight[job.job_id] = (task, job)
+                    owned_job_ids.add(job.job_id)
                 if task is not None:
                     tasks.append(task)
-            _, unfinished = await asyncio.wait(tasks, timeout=max(0.0, budget))
-            for task in unfinished:
-                task.cancel()
-            if unfinished:
-                await asyncio.gather(*unfinished, return_exceptions=True)
-            for job in resumable:
-                self._inflight.pop(job.job_id, None)
+            if tasks:
+                _, unfinished = await asyncio.wait(tasks, timeout=max(0.0, budget))
+                for task in unfinished:
+                    task.cancel()
+                if unfinished:
+                    await asyncio.gather(*unfinished, return_exceptions=True)
+            for job_id in owned_job_ids:
+                self._inflight.pop(job_id, None)
         self._persist(batch)
         return batch
 
     async def _share(
-        self, inflight: asyncio.Task[ProfileResponse], job: ProfileJob, batch: Batch
+        self,
+        inflight: asyncio.Task[None],
+        owner: ProfileJob,
+        job: ProfileJob,
+        batch: Batch,
     ) -> None:
         try:
-            response = await inflight
+            await inflight
         except Exception:  # noqa: BLE001 - the primary owner records the failure
             return
-        self._adopt(batch, job, response)
+        if owner.response is not None:
+            self._adopt(batch, job, owner.response)
+            return
+        # The shared extraction failed or was returned to the queue. Mirror
+        # that typed state rather than inventing a successful empty response.
+        job.state = owner.state
+        job.attempts = owner.attempts
+        job.error_code = owner.error_code
+        job.error_detail = owner.error_detail
+        job.history = list(owner.history)
+        job.updated_at = datetime.now(UTC)
 
     def _adopt(self, batch: Batch, job: ProfileJob, response: ProfileResponse) -> None:
         if job.state is JobState.SUCCEEDED:
@@ -527,7 +548,6 @@ class BatchService:
         else:
             job.response = response
             job.state = JobState.SUCCEEDED
-            self._completed[job.job_id] = response
             job.history.append(
                 Attempt(
                     started_at=started.isoformat(),
@@ -577,7 +597,9 @@ class BatchService:
         rows = []
         for job in batch.jobs:
             response = job.response.model_dump(mode="json") if job.response else None
-            rows.append(exports.flatten(response, job.state.value, job.error_code))
+            row = exports.flatten(response, job.state.value, job.error_code)
+            row["linkedin_url"] = job.canonical.canonical_url
+            rows.append(row)
         return rows
 
     def report(self, batch_id: str) -> dict[str, Any]:
@@ -609,13 +631,19 @@ class BatchService:
             )
             return JSONResponse(
                 payload,
-                headers={"Content-Disposition": f'attachment; filename="{batch_id}.json"'},
+                headers={
+                    "Cache-Control": "no-store, max-age=0",
+                    "Content-Disposition": f'attachment; filename="{batch_id}.json"',
+                },
             )
         if export_format == "csv":
             return Response(
                 content=exports.csv_bytes(rows),
                 media_type="text/csv",
-                headers={"Content-Disposition": f'attachment; filename="{batch_id}.csv"'},
+                headers={
+                    "Cache-Control": "no-store, max-age=0",
+                    "Content-Disposition": f'attachment; filename="{batch_id}.csv"',
+                },
             )
         sections_by_url: dict[str, dict[str, list[dict[str, Any]]]] = {}
         provenance_by_url: dict[str, list[dict[str, Any]]] = {}
@@ -630,7 +658,7 @@ class BatchService:
                     for name in ("experience", "education", "skills", "certifications", "languages")
                 }
             provenance_by_url[url] = [o.as_dict() for o in job.occurrences]
-            if job.state is JobState.FAILED:
+            if job.state is not JobState.SUCCEEDED:
                 failures.append(
                     {
                         "linkedin_url": url,
@@ -642,5 +670,8 @@ class BatchService:
         return Response(
             content=exports.xlsx_bytes(rows, sections_by_url, provenance_by_url, failures),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="{batch_id}.xlsx"'},
+            headers={
+                "Cache-Control": "no-store, max-age=0",
+                "Content-Disposition": f'attachment; filename="{batch_id}.xlsx"',
+            },
         )

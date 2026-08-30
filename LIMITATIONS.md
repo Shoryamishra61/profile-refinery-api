@@ -1,12 +1,12 @@
 # Limitations
 
-- No current LinkedIn operation has been observed or directly replayed in this environment. All enabled records are synthetic `FIXTURE_VERIFIED` operations and live mode refuses them.
-- No LinkedIn session secrets or current query identifiers were available. This blocks core identity resolution and all live sections.
-- Pagination is not implemented because no current response established cursor/count/termination semantics. “Full history” is not claimed.
-- A missing key is classified as `not_provided` only for a successful fixture contract. Live hiddenness is never inferred from absence alone.
-- The in-process caller limiter is appropriate for one challenge container. Multiple replicas would need an ingress-level shared limiter, not an unmeasured Redis addition.
-- No public HTTPS service or external latency evidence is available. Deployment files are prepared, but provider access is external to the repository.
-- The container builds and passes local health/profile smoke tests. This is not public deployment evidence.
-- LinkedIn may change operations, response entities, query IDs, viewer behavior, and access controls without notice. The registry/parser boundary controls failure; it cannot guarantee upstream stability.
-- This project does not claim LinkedIn approval, platform-policy compliance, legal authorization for production scraping, GDPR/DPDP compliance, or universal profile completeness.
-- PhantomBuster was not run on comparable profiles, so no speed or coverage superiority is claimed.
+- LinkedIn is an undocumented, mutable upstream. A registered request may be challenged or may drift without notice; the service fails closed in either case.
+- Completeness depends on what the authenticated viewer can access. Missing data remains missing and is never inferred.
+- Languages has successful live operation evidence but no non-empty real sample in the retained evidence set.
+- Pagination is not claimed where a captured protocol has not established cursor and termination semantics.
+- The caller limiter, circuit breaker, readiness observation, and journal are process-local. Multi-instance production needs shared implementations at the platform boundary.
+- Vercel storage is ephemeral. Long-lived batch history requires a persistent `JournalStore` implementation.
+- Request-scoped extraction accepts at most 10 profiles per API call. The web client can coordinate up to 200 discovered profiles in sequential groups.
+- LinkedIn post URLs are discovered but not resolved to authors without a verified semantic post-to-author protocol.
+- PDF is an input format, not an export format. Exports are JSON, CSV, XLSX, and self-contained HTML profile cards.
+- The project does not claim LinkedIn endorsement, universal policy compliance, or a lawful basis for every possible deployment. Operators remain responsible for authorization, data protection, and platform terms.

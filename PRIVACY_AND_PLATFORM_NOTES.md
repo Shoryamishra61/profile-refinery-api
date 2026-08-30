@@ -1,17 +1,9 @@
 # Privacy and Platform Notes
 
-Engineering risk memo, not legal advice.
+This is an engineering risk note, not legal advice.
 
-LinkedIn profile data is identifiable personal data. LinkedIn's current contractual terms, as recorded in the supplied primary-source research, restrict scraping/copying profiles and bypassing access controls. The Profile Refinery challenge nevertheless asks for reverse engineering and direct endpoint calls. This repository states that tension and does not claim LinkedIn approval.
+LinkedIn profile records are identifiable personal data. An operator must establish authorization and a lawful basis before processing them, observe applicable platform terms, and provide suitable retention, access, deletion, and incident-response controls.
 
-Risk reduction in the implementation:
+Profile Refinery minimizes exposure by accepting only strict member URLs, supporting owned request-scoped sessions, avoiding contact enrichment, processing credentials only in memory, suppressing response caching, excluding raw payloads and secrets from logs, and failing closed on challenges or unknown semantic structures. It does not automate login, solve CAPTCHAs, rotate accounts or proxies, forge challenge tokens, spoof fingerprints, or bypass access controls.
 
-- validate only owned/consented profiles during research and evaluation;
-- use one developer-owned session, never stolen sessions or account farms;
-- collect only assignment fields; no email/contact enrichment;
-- process ephemerally with no people database or raw payload logs;
-- carry viewer context and observation time because visibility is contextual;
-- fail closed on challenge and avoid access-control bypass behavior;
-- use synthetic checked-in fixtures and independently authored expected results.
-
-Before any real deployment, the operator must establish a lawful basis, retention/access/deletion processes, jurisdiction-specific notices, a platform-risk decision, and incident response. “Publicly visible” does not make personal data privacy-exempt.
+Visibility is contextual to a viewer and observation time. The response therefore preserves provenance and availability instead of treating an absent field as universally absent. Production operators should minimize collected fields, restrict access, define retention, and validate their legal and platform-risk position independently.

@@ -1,19 +1,15 @@
 # Reverse-Engineering Method
 
-## Evidence contract
+Protocol work is evidence-led and semantic. It models stable operations and entities rather than DOM layout.
 
-Protocol claims use exactly one class: `PRIMARY_VERIFIED`, `LIVE_OBSERVED`, `FIXTURE_VERIFIED`, `HISTORICAL_PRACTITIONER`, `VENDOR_CLAIM`, `INFERENCE`, or `UNKNOWN`. Repetition does not upgrade evidence.
+1. Select an owned or consented profile and record viewer, locale, timestamp, and visible ground truth.
+2. Capture a bounded request with developer tools. Never commit cookies, tokens, raw HAR files, or unrelated personal data.
+3. Reduce the capture to a safe contract: method, host, path, parameter names, component identifier, body keys, protocol headers, redirect policy, response type, size, and semantic markers.
+4. Replay with standard HTTP through the same transport boundary. Stop on challenges; do not synthesize telemetry or bypass access controls.
+5. Decode React Flight records and resolve target ownership before accepting any entity. Unknown or identity-less shapes are operation drift, not profiles.
+6. Add a redacted replay fixture, an independent expected result, and mutation tests for missing, reordered, and unknown fields.
+7. Mark an operation `live_verified` only after an authorized direct request succeeds. Keep live, real replay, and synthetic-unit evidence distinct.
+8. Implement pagination or new sections only after captures establish their semantics and termination conditions.
+9. Compare normalized output with viewer-specific ground truth and report missing values honestly.
 
-## Controlled workflow
-
-1. Select an owned/consented profile and record viewer, locale, timestamp, and manually visible assignment fields.
-2. Use DevTools/HAR only as a research instrument. Never commit cookies, tokens, raw HAR, or unrelated profile data.
-3. Identify the minimum core operation by semantic purpose. Record redacted method, path template, operation name, input variables, response family, pagination evidence, and timestamp.
-4. Replay the request through `LinkedInTransport` using standard HTTPX. Do not add browser runtime, CAPTCHA solving, session theft, account farming, telemetry emulation, TLS/WAF spoofing, or proxy rotation.
-5. If LinkedIn returns a checkpoint/challenge, stop requests on that session and require manual recovery.
-6. Save a redacted fixture, implement a deterministic parser, and test missing/type-mutated/unknown fields.
-7. Update the registry to `live_verified` only after replay succeeds. Query IDs remain environment configuration and carry an observation date.
-8. Repeat one section at a time. Implement pagination only when a current response proves pagination semantics and termination.
-9. Compare the deployed normalized output to independently recorded human ground truth for viewer V at time T.
-
-The current repository has completed the fixture/parser methodology only. It has no `LIVE_OBSERVED` operation record because no authorized session/capture was available in the execution environment.
+The registered primary path is an SDUI React Flight component request for core identity followed by identity-scoped profile-card requests. An authenticated profile-page operation is a core fallback and bounded location-enrichment path. Safe request-shape details live in [docs/REVERSE_ENGINEERING_PROTOCOL.md](docs/REVERSE_ENGINEERING_PROTOCOL.md).

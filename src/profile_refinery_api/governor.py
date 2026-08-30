@@ -114,7 +114,10 @@ class CircuitBreaker:
         """Return (allowed, seconds_until_retry). At most one HALF_OPEN probe."""
         if self.state is BreakerState.CLOSED:
             return True, 0.0
-        assert self.opened_at is not None
+        if self.opened_at is None:
+            # Defensive repair for a corrupted/restored OPEN state. Starting a
+            # fresh cooldown is safer than crashing or allowing an ungoverned probe.
+            self.opened_at = time.monotonic()
         elapsed = time.monotonic() - self.opened_at
         remaining = max(0.0, self._cooldown - elapsed)
         if remaining > 0:
@@ -266,7 +269,8 @@ class UpstreamGovernor:
 
     async def _backoff(self, attempt: int) -> None:
         base = min(self._max_backoff, 0.5 * (2 ** (attempt - 1)))
-        jittered = base * random.uniform(0.8, 1.2)  # noqa: S311 - jitter, not crypto
+        # This selects retry timing and has no cryptographic role.
+        jittered = base * random.uniform(0.8, 1.2)  # noqa: S311  # nosec B311
         await asyncio.sleep(jittered)
 
     def observe(self) -> dict[str, Any]:

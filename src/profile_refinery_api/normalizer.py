@@ -76,11 +76,12 @@ def normalize_profile(
 
     def section(name: str, model: type[Any]) -> ProfileField[Any]:
         if name in failures:
-            status = (
-                FieldStatus.UPSTREAM_FAILED
-                if failures[name] == "upstream_failed"
-                else FieldStatus.NOT_AVAILABLE_FROM_ENDPOINT
-            )
+            status = {
+                "parser_failed": FieldStatus.PARSER_FAILED,
+                "upstream_failed": FieldStatus.UPSTREAM_FAILED,
+                "not_found": FieldStatus.UPSTREAM_FAILED,
+                "session_challenged": FieldStatus.UPSTREAM_FAILED,
+            }.get(failures[name], FieldStatus.NOT_AVAILABLE_FROM_ENDPOINT)
             return field(None, name, observed_at, status=status, raw_ref=core_ref)
         raw = sections.get(name, [])
         try:

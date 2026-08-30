@@ -15,6 +15,8 @@ from .discovery import Occurrence, discover_in_text, discover_posts_in_text
 
 ProfileFinding = tuple[str, Occurrence]
 PostFinding = tuple[str, str | None, Occurrence]
+_MAX_OOXML_FILES = 10_000
+_MAX_OOXML_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 
 
 @dataclass(slots=True)
@@ -38,7 +40,16 @@ def sniff_kind(payload: bytes, filename: str) -> str:
     if payload.startswith(b"PK\x03\x04"):
         try:
             with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-                names = archive.namelist()
+                members = archive.infolist()
+                if (
+                    len(members) > _MAX_OOXML_FILES
+                    or sum(member.file_size for member in members)
+                    > _MAX_OOXML_UNCOMPRESSED_BYTES
+                ):
+                    raise IngestError("The OOXML archive expands beyond the safe limit.")
+                names = [member.filename for member in members]
+        except IngestError:
+            raise
         except zipfile.BadZipFile as exc:
             raise IngestError("The upload is a corrupt OOXML archive.") from exc
         if any(name.startswith("xl/") for name in names):

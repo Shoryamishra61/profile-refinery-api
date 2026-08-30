@@ -1,38 +1,19 @@
 # Reproducibility
 
-## Locked environment
-
-`uv.lock` resolves Python 3.12 dependencies. CI uses `uv sync --extra dev --locked`, Ruff, strict mypy, pytest, the security audit, and the independent fixture benchmark. No LinkedIn secret is needed for CI.
-
-## Clean-room procedure
+Python 3.12 dependencies are pinned by `uv.lock`. CI needs no LinkedIn credentials and never performs a live upstream request.
 
 ```bash
-git clone https://github.com/Shoryamishra61/profile-refinery-api.git clean-room
-cd clean-room
+git clone https://github.com/Shoryamishra61/profile-refinery-api.git
+cd profile-refinery-api
 uv sync --extra dev --locked --python 3.12
-uv run ruff check src tests scripts
-uv run mypy
+uv run ruff check src tests config scripts
+uv run mypy src/profile_refinery_api
 uv run pytest
 uv run python scripts/security_audit.py
-uv run profile-refinery-benchmark --json --iterations 10
 uv run pip-audit
 docker build -t profile-refinery-api:local .
 ```
 
-Local API:
+Start the API with `uv run uvicorn profile_refinery_api.main:app --host 127.0.0.1 --port 8000`. With no owned LinkedIn session configured, `/healthz` is healthy while `/readyz` and backend-session extraction fail closed. Deterministic tests use authored fixtures or redacted replay inputs and label that evidence separately from live observations.
 
-```bash
-export APP_API_KEYS=replace-with-a-new-random-key
-export APP_MODE=fixture
-uv run uvicorn profile_refinery_api.main:app --host 127.0.0.1 --port 8000
-```
-
-Then check `/healthz`, `/readyz`, `/openapi.json`, missing/invalid auth, invalid URL, and an authenticated synthetic profile call. Fixture output is deterministic except observation time and measured local durations.
-
-## Independence check
-
-`tests/fixtures/raw/*.json` are synthetic upstream-shaped inputs. `tests/fixtures/expected/synthetic-profile.expected.json` is a separately checked-in semantic answer key. `benchmark.py` parses the actual pipeline response and compares it to that file. It never writes system output into expected data.
-
-## Archive integrity
-
-`11_ARCHIVE_ORIGINALS/` is excluded from lint/runtime and preserved as supplied. Representative SHA-256 values remained equal to `PACKAGE_MANIFEST.json` during the build audit.
+Live verification is intentionally manual and controlled: configure secrets outside the repository, use one consented profile, make one bounded request, and record only safe counts and provenance. A passing replay or unit suite is not live-extraction evidence.

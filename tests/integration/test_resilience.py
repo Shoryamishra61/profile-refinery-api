@@ -254,6 +254,37 @@ async def test_durable_jobs_survive_restart(tmp_path: Any) -> None:
 
 
 @pytest.mark.asyncio
+async def test_crash_restored_running_job_returns_to_pending_queue(tmp_path: Any) -> None:
+    settings = build_settings(tmp_path)
+    runtime = Runtime(settings, transport=FakeUpstream())
+    app = create_app(runtime=runtime)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://t"
+    ) as client:
+        created = await client.post("/v1/batches", params={"text": slugs(1)}, headers=AUTH)
+        batch_id = created.json()["batch_id"]
+    await runtime.aclose()
+
+    journal = settings.app_store_dir / f"batch-{batch_id}.json"
+    document = json.loads(journal.read_text(encoding="utf-8"))
+    document["jobs"][0]["state"] = "RUNNING"
+    journal.write_text(json.dumps(document), encoding="utf-8")
+
+    resumed_upstream = FakeUpstream()
+    resumed_runtime = Runtime(settings, transport=resumed_upstream)
+    resumed_app = create_app(runtime=resumed_runtime)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=resumed_app), base_url="http://t"
+    ) as client:
+        response = await client.get(
+            f"/v1/batches/{batch_id}", params={"wait_seconds": 5}, headers=AUTH
+        )
+    assert response.json()["statistics"]["succeeded"] == 1
+    assert resumed_upstream.calls == 1
+    await resumed_runtime.aclose()
+
+
+@pytest.mark.asyncio
 async def test_request_coalescing_duplicate_profiles(tmp_path: Any) -> None:
     upstream = FakeUpstream(latency=0.05)
     settings = build_settings(tmp_path)
@@ -270,12 +301,16 @@ async def test_request_coalescing_duplicate_profiles(tmp_path: Any) -> None:
         assert batch_a != batch_b
         assert summary_a["statistics"]["succeeded"] == 5
         assert summary_b["statistics"]["succeeded"] == 5
-        # Distinct slugs across the two batches are 5, so with coalescing the
-        # upstream sees at most 5 extractions (some may repeat if the second
-        # batch started after the first completed - both outcomes are
-        # correct; the assertion documents which occurred).
-        print(f"upstream calls across duplicate batches: {upstream.calls}")
-        assert upstream.calls <= 10
+        assert upstream.calls == 5
+        for batch_id in (batch_a, batch_b):
+            profiles = (
+                await client.get(
+                    f"/v1/batches/{batch_id}/profiles",
+                    params={"include_responses": True},
+                    headers=AUTH,
+                )
+            ).json()["profiles"]
+            assert all(item["response"]["profile"]["name"]["value"] for item in profiles)
     await runtime.aclose()
 
 

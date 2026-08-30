@@ -146,6 +146,26 @@ def test_sniff_kind_uses_content_not_extension() -> None:
     assert sniff_kind(b'{"a": ["https://www.linkedin.com/in/x"]}', "b.txt") == "json"
 
 
+def test_ooxml_zip_bomb_metadata_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Member:
+        filename = "word/document.xml"
+        file_size = 101 * 1024 * 1024
+
+    class Archive:
+        def __enter__(self) -> Archive:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def infolist(self) -> list[Member]:
+            return [Member()]
+
+    monkeypatch.setattr(zipfile, "ZipFile", lambda _: Archive())
+    with pytest.raises(IngestError, match="expands beyond the safe limit"):
+        sniff_kind(b"PK\x03\x04metadata-only", "resume.docx")
+
+
 def test_txt_ingestion_records_line_numbers() -> None:
     payload = b"intro\ncontact linkedin.com/in/line-two\nlinkedin.com/in/line-three"
     found = ingest(payload, "people.txt", "people.txt")

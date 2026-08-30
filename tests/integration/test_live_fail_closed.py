@@ -59,6 +59,8 @@ def test_readiness_requires_observed_live_success() -> None:
     assert runtime.extraction_capability()["state"] == "UNVERIFIED"
     runtime.mark_live_success()
     assert runtime.ready is True
+    runtime.governor.breaker.record_challenge()
+    assert runtime.ready is False
 
 
 def test_live_response_rejects_fixture_sentinels() -> None:

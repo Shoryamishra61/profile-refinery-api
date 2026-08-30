@@ -383,7 +383,11 @@ class LinkedInTransport:
             attempts += 1
             if result is not None:
                 return result
-            assert error is not None
+            if error is None:
+                raise UpstreamOperationDrift(
+                    operation.semantic_name,
+                    "Transport returned neither a result nor a typed decoration failure.",
+                )
             last_error = error if isinstance(error, UpstreamOperationDrift) else None
             if last_error is None:
                 raise error

@@ -245,6 +245,71 @@ async def test_valid_profile_view_core_does_not_call_profile_page(
 
 
 @pytest.mark.asyncio
+async def test_profile_metadata_counts_only_current_fetch_calls(
+    client: httpx.AsyncClient,
+) -> None:
+    first = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/first-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    second = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/second-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert first.json()["meta"]["upstream_calls"] == 1
+    assert second.json()["meta"]["upstream_calls"] == 1
+
+
+@pytest.mark.asyncio
+async def test_optional_section_parser_drift_returns_typed_partial_profile(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    core_only = json.loads(json.dumps(FULL_PROFILE_FIXTURE))
+    core_only["included"] = [core_only["included"][0]]
+    core_only["data"]["*elements"] = [core_only["included"][0]["entityUrn"]]
+    stub_transport.set("profile_view", [core_only])
+    stub_transport.set("profile_experience", [{"flight": '0:{"children":[]}\n'}])
+
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["partial"] is True
+    assert body["profile"]["experience"]["status"] == "parser_failed"
+    assert body["meta"]["coverage"]["experience"] == "unavailable"
+    assert "profile_experience" in body["meta"]["operations_attempted"]
+    assert "profile_experience" not in body["meta"]["operations_succeeded"]
+
+
+@pytest.mark.asyncio
+async def test_location_enrichment_challenge_marks_profile_partial_and_not_ready(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    core_without_location = json.loads(json.dumps(FULL_PROFILE_FIXTURE))
+    core_without_location["included"][0].pop("locationName")
+    stub_transport.set("profile_view", [core_without_location])
+    stub_transport.set("profile_page", [UpstreamChallenge()])
+
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/test-integration-profile/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["partial"] is True
+    assert "location: session_challenged" in body["meta"]["warnings"]
+    assert (await client.get("/readyz")).status_code == 503
+
+
+@pytest.mark.asyncio
 async def test_missing_rsc_location_is_enriched_from_profile_page_flight(
     client: httpx.AsyncClient, stub_transport: object
 ) -> None:
@@ -433,8 +498,17 @@ async def test_profile_media_proxy_returns_allowlisted_image(
 
     class FakeResponse:
         status_code = 200
-        content = image_bytes
         headers = {"content-type": "image/jpeg"}
+
+        async def aiter_bytes(self) -> object:
+            yield image_bytes
+
+    class FakeStream:
+        async def __aenter__(self) -> FakeResponse:
+            return FakeResponse()
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
 
     class FakeAsyncClient:
         def __init__(self, **kwargs: object) -> None:
@@ -446,9 +520,10 @@ async def test_profile_media_proxy_returns_allowlisted_image(
         async def __aexit__(self, *args: object) -> None:
             return None
 
-        async def get(self, url: str, **kwargs: object) -> FakeResponse:
+        def stream(self, method: str, url: str, **kwargs: object) -> FakeStream:
+            assert method == "GET"
             requested.append(url)
-            return FakeResponse()
+            return FakeStream()
 
     monkeypatch.setattr(api_module.httpx, "AsyncClient", FakeAsyncClient)
     source = "https://media.licdn.com/dms/image/profile-photo?e=1&t=signed"
@@ -479,6 +554,51 @@ async def test_profile_media_proxy_rejects_non_linkedin_host_without_fetch(
     )
     assert response.status_code == 400
     assert called is False
+
+
+@pytest.mark.asyncio
+async def test_profile_media_proxy_rejects_oversize_before_streaming(
+    client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    streamed = False
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"content-type": "image/jpeg", "content-length": "6000000"}
+
+        async def aiter_bytes(self) -> object:
+            nonlocal streamed
+            streamed = True
+            yield b"must-not-be-read"
+
+    class FakeStream:
+        async def __aenter__(self) -> FakeResponse:
+            return FakeResponse()
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> FakeAsyncClient:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        def stream(self, method: str, url: str, **kwargs: object) -> FakeStream:
+            return FakeStream()
+
+    monkeypatch.setattr(api_module.httpx, "AsyncClient", FakeAsyncClient)
+    response = await client.get(
+        "/v1/profile-media",
+        params={"url": "https://media.licdn.com/dms/image/profile-photo"},
+    )
+    assert response.status_code == 502
+    assert streamed is False
 
 
 @pytest.mark.asyncio

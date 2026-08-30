@@ -41,7 +41,7 @@ def main() -> None:
             if (
                 path in scanned
                 or not path.is_file()
-                or {"11_ARCHIVE_ORIGINALS", ".git", ".venv", "__pycache__"}.intersection(path.parts)
+                or {".git", ".venv", "__pycache__"}.intersection(path.parts)
             ):
                 continue
             scanned.add(path)

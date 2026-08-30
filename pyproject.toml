@@ -54,7 +54,6 @@ asyncio_mode = "auto"
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-extend-exclude = ["11_ARCHIVE_ORIGINALS", "scripts/acceptance_run.py", "scripts/quiet_recovery_validation.py", "scripts/production_differential.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
@@ -64,7 +63,6 @@ ignore = ["E501", "S101"]
 python_version = "3.12"
 strict = true
 files = ["src/profile_refinery_api"]
-exclude = ["11_ARCHIVE_ORIGINALS"]
 
 [[tool.mypy.overrides]]
 module = ["defusedxml.*", "pypdf.*"]

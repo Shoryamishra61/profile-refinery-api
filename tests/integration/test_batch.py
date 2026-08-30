@@ -91,6 +91,14 @@ async def test_batch_partial_failure_preserves_successes(
     succeeded = [job for job in profiles["profiles"] if job["state"] == "SUCCEEDED"]
     assert failed[0]["error_code"] == "PROFILE_NOT_FOUND"
     assert succeeded[0]["response"]["profile"]["name"]["value"] == "Integration Check"
+    csv_response = await client.get(
+        f"/v1/batches/{summary['batch_id']}/export",
+        params={"format": "csv"},
+        headers=auth(client),
+    )
+    rows = list(csv.DictReader(io.StringIO(csv_response.text)))
+    failed_row = next(row for row in rows if row["status"] == "FAILED")
+    assert failed_row["linkedin_url"].endswith("/missing-person")
 
 
 @pytest.mark.asyncio
@@ -148,6 +156,7 @@ async def test_batch_exports_csv_json_xlsx(client: httpx.AsyncClient) -> None:
     )
     assert csv_response.status_code == 200
     assert csv_response.headers["content-type"].startswith("text/csv")
+    assert csv_response.headers["cache-control"].startswith("no-store")
     csv_rows = list(csv.DictReader(io.StringIO(csv_response.text)))
     assert list(csv_rows[0]) == FLAT_COLUMNS
     assert csv_rows[0]["name"] == "Integration Check"
@@ -168,6 +177,7 @@ async def test_batch_exports_csv_json_xlsx(client: httpx.AsyncClient) -> None:
         headers=auth(client),
     )
     document = json_response.json()
+    assert json_response.headers["cache-control"].startswith("no-store")
     assert document["batch"]["batch_id"] == summary["batch_id"]
     exported = document["profiles"][0]
     assert exported["canonical_url"].endswith("test-integration-profile")
@@ -188,6 +198,7 @@ async def test_batch_exports_csv_json_xlsx(client: httpx.AsyncClient) -> None:
         headers=auth(client),
     )
     assert xlsx_response.status_code == 200
+    assert xlsx_response.headers["cache-control"].startswith("no-store")
     workbook = openpyxl.load_workbook(io.BytesIO(xlsx_response.content))
     sheet = workbook.active
     assert sheet.cell(row=1, column=1).value == "linkedin_url"
@@ -362,6 +373,7 @@ async def test_batch_rejects_unsupported_binary_and_oversize(
     assert response.status_code == 202
     summary = response.json()
     assert summary["statistics"]["unique_profiles"] == 0
+    assert summary["status"] == "FAILED"
     assert summary["skipped_inputs"][0]["reason"] == "Unsupported binary file format."
 
 

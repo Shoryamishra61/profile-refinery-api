@@ -99,6 +99,9 @@ class ProfileOrchestrator:
         section_failures: dict[str, str] = {}
         coverage: dict[str, str] = {}
         last_error: UpstreamFailure | None = None
+        starting_call_count = self._transport.call_count
+        upstream_latency_ms = 0.0
+        core_enrichment_failed = False
 
         result: OperationResult | None = None
         parsed: dict[str, Any] | None = None
@@ -108,6 +111,7 @@ class ProfileOrchestrator:
             attempted.append(semantic_name)
             try:
                 candidate = await self._execute(semantic_name, canonical.slug, request_id)
+                upstream_latency_ms += candidate.duration_ms
                 parsed_candidate = parse_core_payload(candidate.payload, canonical.slug)
                 result = candidate
                 parsed = parsed_candidate
@@ -191,20 +195,31 @@ class ProfileOrchestrator:
                 coverage[name] = COVERAGE_UNAVAILABLE
                 warnings.append(f"{name}: {type(exc).__name__}")
                 continue
-            succeeded.append(contract)
+            upstream_latency_ms += section_result.duration_ms
             returned_sections = (
                 RSC_CONTRACT_SECTIONS[contract]
                 if operation.kind is TransportKind.RSC
                 else (name,)
             )
+            parsed_any = False
             for returned_name in returned_sections:
-                sections[returned_name] = parse_section_payload(
-                    section_result.payload, returned_name
-                )
+                try:
+                    parsed_section = parse_section_payload(
+                        section_result.payload, returned_name
+                    )
+                except UpstreamFailure as exc:
+                    section_failures[returned_name] = "parser_failed"
+                    coverage[returned_name] = COVERAGE_UNAVAILABLE
+                    warnings.append(f"{returned_name}: {type(exc).__name__}")
+                    continue
+                sections[returned_name] = parsed_section
                 coverage[returned_name] = (
                     COVERAGE_EMPTY if not sections[returned_name] else COVERAGE_OBSERVED
                 )
                 dedicated_observed.add(returned_name)
+                parsed_any = True
+            if parsed_any:
+                succeeded.append(contract)
 
         # The verified Activity component owns identity, headline, and photo,
         # but captured streams do not carry profile location. Modern profile
@@ -222,6 +237,7 @@ class ProfileOrchestrator:
                 page_result = await self._execute(
                     FALLBACK_OPERATION, canonical.slug, request_id
                 )
+                upstream_latency_ms += page_result.duration_ms
                 page_parsed = parse_core_payload(page_result.payload, canonical.slug)
                 page_location = page_parsed["core"].get("location")
                 if page_location:
@@ -231,7 +247,13 @@ class ProfileOrchestrator:
                 else:
                     warnings.append("location: not_visible_in_profile_page")
             except (CircuitOpen, UpstreamFailure) as exc:
-                warnings.append(f"location: {type(exc).__name__}")
+                core_enrichment_failed = True
+                warning = (
+                    "location: session_challenged"
+                    if isinstance(exc, (CircuitOpen, UpstreamChallenge))
+                    else f"location: {type(exc).__name__}"
+                )
+                warnings.append(warning)
 
         profile = normalize_profile(
             canonical.slug, core, sections, timestamp, section_failures=section_failures
@@ -240,7 +262,7 @@ class ProfileOrchestrator:
             input_url=canonical.input_url,
             canonical_url=canonical.canonical_url,
             observed_at=timestamp,
-            partial=bool(section_failures),
+            partial=bool(section_failures) or core_enrichment_failed,
             retrieval=Retrieval(
                 mode="live",
                 source="linkedin",
@@ -248,7 +270,7 @@ class ProfileOrchestrator:
                 requested_url=canonical.input_url,
                 canonical_url=canonical.canonical_url,
                 observed_at=timestamp,
-                partial=bool(section_failures),
+                partial=bool(section_failures) or core_enrichment_failed,
             ),
             profile=profile,
             meta=ResponseMeta(
@@ -256,8 +278,8 @@ class ProfileOrchestrator:
                 operations_attempted=attempted,
                 operations_succeeded=succeeded,
                 transport_strategy=strategy,
-                upstream_calls=self._transport.call_count,
-                upstream_latency_ms=result.duration_ms,
+                upstream_calls=self._transport.call_count - starting_call_count,
+                upstream_latency_ms=upstream_latency_ms,
                 warnings=warnings,
                 coverage=coverage,
             ),

@@ -86,7 +86,7 @@ stored as text.
 
 ## `GET /v1/profiles`
 
-This legacy operator route uses a backend-configured LinkedIn session. Query
+This operator route uses a backend-configured LinkedIn session. Query
 parameter `url` is required and must be an HTTPS `linkedin.com/in/{slug}` or
 `www.linkedin.com/in/{slug}` URL. Tracking query parameters are discarded. A
 generic operator `X-API-Key` is required.
@@ -95,7 +95,7 @@ Success is HTTP 200 with schema version, input/canonical URLs, observation time,
 
 Availability values are `present`, `not_provided`, `not_visible_to_viewer`, `not_available_from_endpoint`, `upstream_failed`, `parser_failed`, `stale_or_expired`, and `unknown`. The implementation does not emit `not_visible_to_viewer` without affirmative evidence.
 
-`meta.upstream_calls` and `meta.upstream_latency_ms` are measured by the transport path. In fixture mode these are fixture-operation count and local file/parse timing, not LinkedIn calls or live latency.
+`meta.upstream_calls` and `meta.upstream_latency_ms` are request-local measurements from the direct transport path.
 
 ## Partial success
 
@@ -115,6 +115,8 @@ Errors use `application/problem+json` with RFC 9457-compatible `type`, `title`, 
 | 503 | `UPSTREAM_AUTH_EXPIRED` | Owned session requires renewal |
 | 503 | `UPSTREAM_CHALLENGE` | Checkpoint detected; session stopped |
 | 503 | `UPSTREAM_RATE_LIMITED` | LinkedIn rate limited the operation |
+| 503 | `UPSTREAM_FORBIDDEN` | LinkedIn returned a generic forbidden response |
+| 503 | `UPSTREAM_UNAVAILABLE` | LinkedIn returned a server-side failure |
 | 504 | `UPSTREAM_TIMEOUT` | Bounded transport budget exhausted |
 | 500 | `INTERNAL_CONTRACT_FAILURE` | Service refused invalid normalized output |
 

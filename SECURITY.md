@@ -5,8 +5,8 @@
 Historical versions of `scripts/session_capture_watch.py` contained literal
 LinkedIn companion-cookie values. The values first appeared in commit
 `c013a500e3e924e1b09ddf9ddf9a9cf002dc8816` and remained in the public history
-through `f91b5ecd1ea956cea329a3f062d151a4ac1397c2`. The affected script was
-removed from every rewritten Git revision.
+through `f91b5ecd1ea956cea329a3f062d151a4ac1397c2`. The affected script is absent
+from the current tree.
 
 The public Git history was not rewritten because downstream clones may already
 exist. The affected LinkedIn session and its complete cookie set must be
@@ -38,4 +38,4 @@ uv run pytest tests/security tests/unit/test_canonicalizer.py tests/contract/tes
 uv run pip-audit
 ```
 
-The scanner is defense in depth, not proof that arbitrary binary archives contain no historical secret. The preserved archives were supplied as evidence and are not loaded by production.
+The scanner is defense in depth, not proof that every secret class is impossible. Deployment secrets must also be reviewed and rotated through the hosting provider.
