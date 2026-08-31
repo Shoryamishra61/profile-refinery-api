@@ -19,6 +19,34 @@ from .runtime import Runtime
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+OPENAPI_DESCRIPTION = """
+Profile Refinery is an evidence-gated, browserless LinkedIn profile normalization API.
+
+It accepts strict LinkedIn member URLs, executes registered authenticated direct-HTTP
+operations, resolves target-owned semantic identity, and returns schema-validated profile
+records with field-level availability and provenance. Live mode never substitutes fixture,
+replay, cached, or inferred profile data.
+
+Use `POST /v1/session-extractions` for request-scoped credentials or `GET /v1/profiles`
+for an operator-managed backend session. See `/docs` for the field manual and safe session
+setup guidance.
+"""
+
+OPENAPI_TAGS = [
+    {
+        "name": "profiles",
+        "description": "URL discovery, direct extraction, normalized profiles, and exports.",
+    },
+    {
+        "name": "batches",
+        "description": "Deterministic operator batch jobs, reports, and structured exports.",
+    },
+    {
+        "name": "operations",
+        "description": "Liveness, readiness, capability, and controlled protocol diagnostics.",
+    },
+]
+
 
 def create_app(settings: Settings | None = None, runtime: Runtime | None = None) -> FastAPI:
     active_runtime = runtime or Runtime(settings or Settings())
@@ -31,8 +59,18 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
     application = FastAPI(
         title="Profile Refinery API",
         summary="Registry-driven direct HTTP profile normalization research API",
+        description=OPENAPI_DESCRIPTION,
         version=__version__,
         openapi_version="3.1.0",
+        openapi_tags=OPENAPI_TAGS,
+        contact={
+            "name": "Profile Refinery source and issues",
+            "url": "https://github.com/Shoryamishra61/profile-refinery-api",
+        },
+        license_info={
+            "name": "MIT",
+            "identifier": "MIT",
+        },
         docs_url=None,
         redoc_url=None,
         lifespan=lifespan,

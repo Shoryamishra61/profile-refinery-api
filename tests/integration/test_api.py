@@ -443,6 +443,13 @@ async def test_openapi_documents_security(client: httpx.AsyncClient) -> None:
     assert response.status_code == 200
     document = response.json()
     assert document["openapi"].startswith("3.1")
+    assert "evidence-gated" in document["info"]["description"]
+    assert document["info"]["license"]["identifier"] == "MIT"
+    assert {tag["name"] for tag in document["tags"]} == {
+        "profiles",
+        "batches",
+        "operations",
+    }
     operation = document["paths"]["/v1/profiles"]["get"]
     assert operation["security"]
     schemes = document["components"]["securitySchemes"]
@@ -491,6 +498,30 @@ async def test_extraction_desk_and_assets_are_public(client: httpx.AsyncClient) 
     assert "https://*.licdn.com" in page.headers["content-security-policy"]
     assert stylesheet.status_code == 200
     assert script.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_research_api_documentation_is_self_hosted_and_openapi_backed(
+    client: httpx.AsyncClient,
+) -> None:
+    page = await client.get("/docs")
+    stylesheet = await client.get("/assets/docs.css")
+    script = await client.get("/assets/docs.js")
+
+    assert page.status_code == 200
+    assert "API Field Manual" in page.text
+    assert "Success means semantic identity, not HTTP 200" in page.text
+    assert "Two ways to extract" in page.text
+    assert "Three evidence classes" in page.text
+    assert 'id="openapi-operations"' in page.text
+    assert 'src="/assets/docs.js"' in page.text
+    assert "swagger-ui" not in page.text.casefold()
+    assert "default-src 'self'" in page.headers["content-security-policy"]
+    assert stylesheet.status_code == 200
+    assert "operation-card" in stylesheet.text
+    assert script.status_code == 200
+    assert 'fetch("/openapi.json"' in script.text
+    assert 'fetch("/readyz"' in script.text
 
 
 @pytest.mark.asyncio

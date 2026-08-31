@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -55,7 +55,7 @@
           <a href="#protocol">Understand the protocol</a>
         </div>
       </div>
-      <div class="system-card" aria-label="System contract summary">
+      <section class="system-card" aria-label="System contract summary">
         <div class="card-stamp">CONTRACT / 1.2.0</div>
         <dl>
           <div><dt>Input</dt><dd>LinkedIn member URL</dd></div>
@@ -65,7 +65,7 @@
           <div><dt>Safety posture</dt><dd>Typed failure, never fabrication</dd></div>
         </dl>
         <p id="capability-note">Capability state is loading from this deployment.</p>
-      </div>
+      </section>
     </section>
 
     <section class="doc-section" id="quickstart">
@@ -195,7 +195,7 @@ console.log(await response.json());</code></pre>
         <span>04</span>
         <div><p>Acquisition architecture</p><h2>Success means semantic identity, not HTTP 200</h2></div>
       </header>
-      <div class="protocol-flow" aria-label="Extraction protocol flow">
+      <div class="protocol-flow" role="group" aria-label="Extraction protocol flow">
         <article><b>01</b><span>Canonicalize</span><p>Strict HTTPS member URL boundary</p></article>
         <i>→</i>
         <article><b>02</b><span>Acquire core</span><p>SDUI React Flight component request</p></article>

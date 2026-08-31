@@ -1,246 +1,160 @@
-// docs.js - Interactive field manual & OpenAPI explorer
-(function () {
-  'use strict';
+(() => {
+  "use strict";
 
-  const SNIPPETS = {
-    curl: `curl -X POST "https://profile-refinery-api.vercel.app/v1/session-extractions" \\
-  -H "Content-Type: application/json" \\
-  -H "X-Request-ID: my-first-profile" \\
-  -d '{
-    "url": "https://www.linkedin.com/in/example-member",
-    "li_at": "AQEDAT...",
-    "jsessionid": "ajax:1234567890123456789",
-    "bcookie": "v=2&..."
-  }'`,
-    python: `import httpx
+  const healthIndicator = document.querySelector("#health-indicator");
+  const capabilityNote = document.querySelector("#capability-note");
+  const operationsRoot = document.querySelector("#openapi-operations");
+  const endpointSearch = document.querySelector("#endpoint-search");
+  const endpointCount = document.querySelector("#endpoint-count");
+  let operations = [];
 
-payload = {
-    "url": "https://www.linkedin.com/in/example-member",
-    "li_at": "AQEDAT...",
-    "jsessionid": "ajax:1234567890123456789",
-    "bcookie": "v=2&..."
-}
+  const escapeHtml = (value) => String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 
-response = httpx.post(
-    "https://profile-refinery-api.vercel.app/v1/session-extractions",
-    json=payload,
-    headers={"X-Request-ID": "my-first-profile"},
-    timeout=20.0
-)
-data = response.json()
-print("Profile name:", data["profile"]["name"]["value"])`,
-    node: `const payload = {
-  url: "https://www.linkedin.com/in/example-member",
-  li_at: "AQEDAT...",
-  jsessionid: "ajax:1234567890123456789",
-  bcookie: "v=2&..."
-};
-
-const res = await fetch("https://profile-refinery-api.vercel.app/v1/session-extractions", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "X-Request-ID": "my-first-profile"
-  },
-  body: JSON.stringify(payload)
-});
-const data = await res.json();
-console.log(data);`
+  const copyText = async (value, button) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      const previous = button.textContent;
+      button.textContent = "Copied";
+      window.setTimeout(() => { button.textContent = previous; }, 1200);
+    } catch {
+      button.textContent = "Select + copy";
+    }
   };
 
-  // 1. Code tabs switcher
-  const codeTabs = document.querySelectorAll('[data-code-tab]');
-  const quickCode = document.getElementById('quick-code');
-  codeTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      codeTabs.forEach(t => {
-        t.classList.remove('active');
-        t.setAttribute('aria-selected', 'false');
-      });
-      tab.classList.add('active');
-      tab.setAttribute('aria-selected', 'true');
-      const lang = tab.getAttribute('data-code-tab');
-      if (quickCode && SNIPPETS[lang]) {
-        quickCode.innerHTML = '<code>' + escapeHtml(SNIPPETS[lang]) + '</code>';
-      }
+  document.querySelectorAll("[data-copy-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = document.getElementById(button.dataset.copyTarget);
+      if (target) copyText(target.textContent.trim(), button);
     });
   });
 
-  // 2. Copy Code Buttons
-  document.querySelectorAll('.copy-code').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const targetId = btn.getAttribute('data-copy-target');
-      const target = document.getElementById(targetId);
-      if (target) {
-        navigator.clipboard.writeText(target.innerText).then(() => {
-          const original = btn.innerText;
-          btn.innerText = 'Copied!';
-          setTimeout(() => { btn.innerText = original; }, 2000);
-        });
-      }
-    });
-  });
-
-  // 3. Health & Capability Check
-  const healthIndicator = document.getElementById('health-indicator');
-  const capabilityNote = document.getElementById('capability-note');
-  fetch('/healthz')
-    .then(r => r.json())
-    .then(d => {
-      if (healthIndicator && d.status === 'ok') {
-        healthIndicator.innerHTML = '<i style="background:#10b981;box-shadow:0 0 8px #10b981"></i> API live & responsive';
-      }
-    })
-    .catch(() => {
-      if (healthIndicator) {
-        healthIndicator.innerHTML = '<i style="background:#f43f5e"></i> offline / connecting';
-      }
-    });
-
-  fetch('/v1/capability')
-    .then(r => {
-      if (r.status === 401) {
-        if (capabilityNote) capabilityNote.innerText = 'Capability metrics are protected by product API key.';
-        return null;
-      }
-      return r.json();
-    })
-    .then(d => {
-      if (d && capabilityNote) {
-        capabilityNote.innerText = `Breaker: ${d.extraction_capability?.state || 'ONLINE'} · Queue depth: ${d.queue?.queue_depth || 0}`;
-      }
-    })
-    .catch(() => {});
-
-  // 4. Live OpenAPI 3.1 Explorer
-  const operationsContainer = document.getElementById('openapi-operations');
-  const endpointCount = document.getElementById('endpoint-count');
-  const endpointSearch = document.getElementById('endpoint-search');
-  let openapiSpec = null;
-
-  fetch('/openapi.json')
-    .then(r => r.json())
-    .then(spec => {
-      openapiSpec = spec;
-      renderOpenApiOperations(spec);
-    })
-    .catch(err => {
-      if (operationsContainer) {
-        operationsContainer.innerHTML = '<p class="error-msg">Failed to load /openapi.json specification.</p>';
-      }
-    });
-
-  function renderOpenApiOperations(spec, filter = '') {
-    if (!operationsContainer || !spec || !spec.paths) return;
-    const paths = spec.paths;
-    const operations = [];
-
-    Object.keys(paths).forEach(pathKey => {
-      const pathItem = paths[pathKey];
-      ['get', 'post', 'put', 'delete', 'patch'].forEach(method => {
-        if (pathItem[method]) {
-          const op = pathItem[method];
-          operations.push({
-            path: pathKey,
-            method: method.toUpperCase(),
-            summary: op.summary || '',
-            description: op.description || '',
-            tags: op.tags || [],
-            parameters: op.parameters || [],
-            responses: op.responses || {}
-          });
-        }
+  const codeTabs = [...document.querySelectorAll("[data-code-tab]")];
+  const codePanels = [...document.querySelectorAll("[data-code-panel]")];
+  codeTabs.forEach((button) => {
+    button.addEventListener("click", () => {
+      codeTabs.forEach((candidate) => {
+        const selected = candidate === button;
+        candidate.classList.toggle("active", selected);
+        candidate.setAttribute("aria-selected", String(selected));
       });
-    });
-
-    const filtered = operations.filter(op => {
-      if (!filter) return true;
-      const q = filter.toLowerCase();
-      return (
-        op.path.toLowerCase().includes(q) ||
-        op.method.toLowerCase().includes(q) ||
-        op.summary.toLowerCase().includes(q) ||
-        op.description.toLowerCase().includes(q) ||
-        op.tags.some(t => t.toLowerCase().includes(q))
+      codePanels.forEach((panel) => {
+        panel.hidden = panel.dataset.codePanel !== button.dataset.codeTab;
+      });
+      const copy = document.querySelector(".copy-code");
+      const selectedPanel = codePanels.find(
+        (panel) => panel.dataset.codePanel === button.dataset.codeTab,
       );
+      if (copy && selectedPanel) copy.dataset.copyTarget = selectedPanel.id;
     });
+  });
 
-    if (endpointCount) {
-      endpointCount.innerText = `${filtered.length} of ${operations.length} operations`;
-    }
-
-    if (filtered.length === 0) {
-      operationsContainer.innerHTML = '<p style="color:#94a3b8;padding:24px 0;">No matching endpoints found.</p>';
+  const renderOperations = () => {
+    const query = endpointSearch.value.trim().toLowerCase();
+    const visible = operations.filter((operation) => operation.search.includes(query));
+    endpointCount.textContent = `${visible.length} of ${operations.length} operations`;
+    if (!visible.length) {
+      operationsRoot.innerHTML = '<p class="empty-state">No operations match this filter.</p>';
       return;
     }
-
-    operationsContainer.innerHTML = filtered.map(op => {
-      const methodClass = op.method === 'GET' ? 'method-get' : op.method === 'POST' ? 'method-post' : 'method-other';
-      const paramList = (op.parameters || []).map(p => `
-        <tr>
-          <td><code>${escapeHtml(p.name)}</code></td>
-          <td><small>${escapeHtml(p.in || 'query')}</small></td>
-          <td><span>${p.required ? '<b style="color:#f43f5e">required</b>' : '<span style="color:#64748b">optional</span>'}</span></td>
-          <td>${escapeHtml(p.description || '')}</td>
-        </tr>
-      `).join('');
-
-      return `
-        <article class="operation-card">
-          <div class="operation-header">
-            <span class="op-badge ${methodClass}">${op.method}</span>
-            <span class="op-path">${escapeHtml(op.path)}</span>
-            <span class="op-summary">${escapeHtml(op.summary)}</span>
+    operationsRoot.innerHTML = visible.map((operation) => `
+      <details class="operation-card">
+        <summary>
+          <span class="operation-method ${escapeHtml(operation.method)}">${escapeHtml(operation.method)}</span>
+          <code class="operation-path">${escapeHtml(operation.path)}</code>
+          <span class="operation-summary">${escapeHtml(operation.summary)}</span>
+          <span class="operation-tag">${escapeHtml(operation.tag)}</span>
+        </summary>
+        <div class="operation-details">
+          <div>
+            <h4>Contract</h4>
+            <p>${escapeHtml(operation.description || "No additional description is registered.")}</p>
+            <p><strong>Operation ID:</strong> <code>${escapeHtml(operation.operationId)}</code></p>
           </div>
-          <div class="operation-body">
-            ${op.description ? `<p class="op-desc">${escapeHtml(op.description)}</p>` : ''}
-            ${paramList ? `
-              <h4 style="font-size:12px;text-transform:uppercase;color:#64748b;margin:12px 0 6px;">Parameters</h4>
-              <table class="op-table">
-                <thead><tr><th>Name</th><th>In</th><th>Requirement</th><th>Description</th></tr></thead>
-                <tbody>${paramList}</tbody>
-              </table>
-            ` : ''}
+          <div>
+            <h4>Responses</h4>
+            <ul>${operation.responses.map((response) => `<li><code>${escapeHtml(response.status)}</code> ${escapeHtml(response.description)}</li>`).join("")}</ul>
           </div>
-        </article>
-      `;
-    }).join('');
+        </div>
+      </details>
+    `).join("");
+  };
+
+  const loadOpenApi = async () => {
+    try {
+      const response = await fetch("/openapi.json", { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const document = await response.json();
+      operations = Object.entries(document.paths || {}).flatMap(([path, pathItem]) =>
+        Object.entries(pathItem)
+          .filter(([method]) => ["get", "post", "put", "patch", "delete"].includes(method))
+          .map(([method, operation]) => {
+            const summary = operation.summary || operation.operationId || "API operation";
+            const tag = operation.tags?.[0] || "untagged";
+            const responses = Object.entries(operation.responses || {}).map(([status, item]) => ({
+              status,
+              description: item.description || "Documented response",
+            }));
+            return {
+              method,
+              path,
+              summary,
+              tag,
+              description: operation.description || "",
+              operationId: operation.operationId || "—",
+              responses,
+              search: `${method} ${path} ${summary} ${tag}`.toLowerCase(),
+            };
+          }),
+      );
+      operations.sort((left, right) => left.path.localeCompare(right.path) || left.method.localeCompare(right.method));
+      renderOperations();
+    } catch {
+      endpointCount.textContent = "Contract unavailable";
+      operationsRoot.innerHTML = '<p class="empty-state">The OpenAPI document could not be loaded. Use the curated reference above or open <a href="/openapi.json">/openapi.json</a> directly.</p>';
+    }
+  };
+
+  const loadCapability = async () => {
+    try {
+      const [healthResponse, readyResponse] = await Promise.all([
+        fetch("/healthz", { cache: "no-store" }),
+        fetch("/readyz", { cache: "no-store" }),
+      ]);
+      healthIndicator.classList.add(healthResponse.ok ? "healthy" : "degraded");
+      healthIndicator.lastChild.textContent = healthResponse.ok ? " API online" : " API degraded";
+      const ready = await readyResponse.json();
+      const state = ready.extraction_capability?.state || "UNKNOWN";
+      const detail = ready.extraction_capability?.detail || "No capability detail returned.";
+      capabilityNote.textContent = `Current capability: ${state}. ${detail}`;
+    } catch {
+      healthIndicator.classList.add("degraded");
+      healthIndicator.lastChild.textContent = " status unavailable";
+      capabilityNote.textContent = "Deployment capability could not be loaded from this page.";
+    }
+  };
+
+  const navLinks = [...document.querySelectorAll(".rail nav a")];
+  const observedSections = navLinks
+    .map((link) => document.querySelector(link.getAttribute("href")))
+    .filter(Boolean);
+  if ("IntersectionObserver" in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        navLinks.forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("href") === `#${entry.target.id}`);
+        });
+      });
+    }, { rootMargin: "-20% 0px -70%", threshold: 0 });
+    observedSections.forEach((section) => observer.observe(section));
   }
 
-  if (endpointSearch) {
-    endpointSearch.addEventListener('input', (e) => {
-      if (openapiSpec) {
-        renderOpenApiOperations(openapiSpec, e.target.value);
-      }
-    });
-  }
-
-  // 5. Active Rail Link Observer
-  const sections = document.querySelectorAll('main > section[id]');
-  const railLinks = document.querySelectorAll('.rail nav a');
-
-  window.addEventListener('scroll', () => {
-    let current = '';
-    sections.forEach(sec => {
-      const top = sec.offsetTop - 120;
-      if (window.scrollY >= top) {
-        current = sec.getAttribute('id');
-      }
-    });
-    railLinks.forEach(a => {
-      a.classList.remove('active');
-      if (a.getAttribute('href') === '#' + current) {
-        a.classList.add('active');
-      }
-    });
-  }, { passive: true });
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  endpointSearch.addEventListener("input", renderOperations);
+  loadCapability();
+  loadOpenApi();
 })();

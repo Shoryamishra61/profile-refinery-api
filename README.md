@@ -33,7 +33,9 @@ The current protocol uses the `profileCardsActivity` SDUI component for core ide
 
 Fields are returned **when available to the authenticated viewer**. Absence, upstream failure, and parser drift are represented explicitly; the service never invents missing profile values.
 
-## System shape
+## Approach and system design
+
+The implementation treats LinkedIn as a versioned, evidence-gated protocol rather than a page to scrape. Fixed operation contracts acquire semantic React Flight records, a target-identity resolver proves which member owns the returned entities, deterministic parsers normalize only known structures, and schema validation rejects internally inconsistent output. Browser/UI structure is never the production extraction contract.
 
 ```text
 LinkedIn URL / uploaded files
@@ -98,7 +100,9 @@ bcookie=v=2&…; bscookie=v=1&…; liap=true
 
 Do **not** repeat `li_at` or `JSESSIONID` inside `companion_cookies`. They already have authoritative dedicated fields. Duplicating them can create conflicting cookie values and, for `JSESSIONID`, desynchronize the cookie from the derived CSRF header. Request-scoped validation rejects those duplicates; the server-configured transport also excludes them when importing companion cookies.
 
-## API surface
+## API documentation
+
+The research-oriented interactive documentation is available at [profile-refinery-api.vercel.app/docs](https://profile-refinery-api.vercel.app/docs). It includes authentication guidance, quickstarts, protocol flow, response semantics, failure taxonomy, operational readiness, evidence classes, and a searchable explorer generated from the current OpenAPI 3.1 document. The raw machine contract is [profile-refinery-api.vercel.app/openapi.json](https://profile-refinery-api.vercel.app/openapi.json).
 
 | Endpoint | Purpose | Authentication |
 |---|---|---|
@@ -135,7 +139,15 @@ Core fallback is parser-aware: an HTTP 200 identity-less Flight stream is operat
 
 Batch jobs use deterministic identifiers, idempotency, bounded workers, concurrent-request coalescing, partial-failure isolation, and a journal abstraction. Vercel storage is ephemeral; use a persistent `JournalStore` implementation for durable multi-instance operation.
 
-## Local development
+## Setup instructions
+
+### Prerequisites
+
+- Python 3.12
+- [`uv`](https://docs.astral.sh/uv/) for locked dependency installation
+- an authorized LinkedIn session only when performing a controlled live request
+
+### Install and run
 
 ```bash
 uv sync --extra dev --locked
@@ -158,6 +170,42 @@ LINKEDIN_ACCEPT_LANGUAGE
 
 All supported controls and safe defaults are documented in [.env.example](.env.example). Never commit `.env`, cookies, HAR files, or raw upstream responses.
 
+### How to obtain your authorized session values with DevTools
+
+Use only a LinkedIn account and session you own or are explicitly authorized to use. Never provide a LinkedIn password to Profile Refinery, a browser extension, a third party, or this repository.
+
+#### Chrome, Edge, Brave, and other Chromium browsers
+
+1. Sign in to LinkedIn manually at `https://www.linkedin.com` in your normal browser.
+2. Open a LinkedIn page, press `F12` (or `Ctrl+Shift+I`), and select **Application**.
+3. In the left sidebar, open **Storage → Cookies → https://www.linkedin.com**.
+4. Find the cookie named `li_at`. Copy only its **Value** column. Do not copy `li_at=` and do not include surrounding whitespace.
+5. Find `JSESSIONID`. Copy its **Value** from the same browser session. LinkedIn commonly displays a quoted value such as `"ajax:…"`; Profile Refinery accepts it with or without those surrounding quotes.
+6. Optionally find `bcookie` and copy only its value. The public form asks for this one companion value and constructs `bcookie=<value>` itself.
+7. Switch to **Network**, reload the LinkedIn page, and select an ordinary request to `www.linkedin.com`.
+8. Under **Request Headers**, copy the complete `User-Agent` and `Accept-Language` values. The extraction desk fills the current browser User-Agent automatically, but verify it when the session came from a different browser or machine.
+9. Close DevTools when finished. Avoid screenshots, screen sharing, clipboard-history synchronization, or pasting these values into chat or issue trackers.
+
+#### Firefox
+
+1. Sign in manually, press `F12`, and open **Storage → Cookies → https://www.linkedin.com**.
+2. Copy the value columns for `li_at`, `JSESSIONID`, and optionally `bcookie` exactly as described above.
+3. Use **Network → Headers** on a reloaded LinkedIn request to obtain `User-Agent` and `Accept-Language`.
+
+#### Where each value goes
+
+| DevTools value | Public extraction desk | Backend environment |
+|---|---|---|
+| `li_at` value | **li_at cookie value** | `LINKEDIN_LI_AT` |
+| `JSESSIONID` value | **JSESSIONID cookie value** | `LINKEDIN_JSESSIONID` |
+| optional `bcookie` value | **bcookie companion** | `LINKEDIN_COOKIE=bcookie=<value>` |
+| `User-Agent` header | **Request fingerprint → User-Agent** | `LINKEDIN_USER_AGENT` |
+| `Accept-Language` header | **Request fingerprint → Accept-Language** | `LINKEDIN_ACCEPT_LANGUAGE` |
+
+Do not place `li_at` or `JSESSIONID` inside `LINKEDIN_COOKIE`. Their dedicated settings are authoritative, and `JSESSIONID` must remain synchronized with the derived CSRF header. Additional backend companion cookies, when genuinely needed, use normal Cookie-header syntax such as `bcookie=<value>; bscookie=<value>; liap=true`.
+
+Treat all copied values as secrets. Store them in Vercel/host environment secrets or a local ignored `.env`, rotate them after accidental exposure, and never commit them—even temporarily.
+
 ## Verification
 
 ```bash
@@ -169,6 +217,20 @@ uv run pip-audit
 ```
 
 Automated release gates perform only deterministic offline verification. Test success and capture replay do not establish current LinkedIn availability. Production verification must be a controlled authorized call and must report only safe field counts and provenance.
+
+## Known limitations
+
+- LinkedIn is an undocumented and mutable upstream. Challenges, authentication expiry, and semantic drift can interrupt extraction without notice.
+- Completeness depends on the authenticated viewer. Hidden or absent values remain missing and are never inferred.
+- A successful Languages operation has been observed, but the retained real evidence set does not contain a non-empty Languages example.
+- Pagination is implemented only where a captured contract establishes cursor and termination semantics; universal full-history completeness is not claimed.
+- Request-scoped extraction accepts 10 profiles per API call. The web desk coordinates larger discovered sets in sequential groups up to its configured 200-profile limit.
+- Vercel has an ephemeral filesystem and process-local readiness/circuit state. Durable, horizontally scaled batch operation needs a persistent `JournalStore` and shared control-plane implementations.
+- LinkedIn post URLs can be discovered, but author-profile resolution remains unavailable until a captured semantic contract proves that mapping.
+- PDF is supported as an input format, not an export format.
+- This project does not imply LinkedIn endorsement or establish a lawful basis for a specific operator. See [PRIVACY_AND_PLATFORM_NOTES.md](PRIVACY_AND_PLATFORM_NOTES.md).
+
+The maintained limitation register is [LIMITATIONS.md](LIMITATIONS.md).
 
 ## Research and operations documentation
 
