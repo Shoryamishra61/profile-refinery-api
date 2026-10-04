@@ -5,7 +5,90 @@ Profile Refinery is a browserless LinkedIn profile-normalization system built ar
 **Public application:** <https://profile-refinery-api.vercel.app>
 
 **OpenAPI:** <https://profile-refinery-api.vercel.app/docs>
+## Razorpay Forward-Deployed Engineer Assignment
 
+This repository is submitted for **Option 1 — Reverse-engineer an API**.
+
+### Problem
+
+LinkedIn exposes rich profile information through its web product, but there is no generally accessible developer endpoint for retrieving the complete profile representation used by this project.
+
+Profile Refinery investigates that missing integration surface as an undocumented-protocol problem. It observes the application's structured React Flight/SDUI responses, establishes which member owns each returned entity, deterministically normalizes known structures, and exposes the resulting data through a documented HTTP API.
+
+The objective is not to automate the LinkedIn UI. The objective is to turn an unstable, undocumented upstream interface into a bounded and observable API contract.
+
+### Access-control boundary
+
+Profile Refinery requires a LinkedIn session owned by, or explicitly authorized for, the operator when performing live extraction.
+
+The system does **not**:
+
+- automate account login;
+- obtain or guess another user's credentials;
+- solve CAPTCHAs or challenges;
+- bypass profile visibility restrictions;
+- generate challenge tokens;
+- rotate accounts to evade limits;
+- spoof browser fingerprints;
+- infer unavailable profile fields;
+- continue requesting data after the session enters a challenge state.
+
+It only processes information returned to the authorized viewer through ordinary LinkedIn product access. Authentication expiry, visibility restrictions, challenges, and unavailable sections are treated as explicit failure or partial-result states rather than conditions to circumvent.
+
+### API surface
+
+The primary assignment endpoints are:
+
+- `GET /v1/profiles?url=...` — normalize one profile using the configured authorized session.
+- `POST /v1/session-extractions` — perform request-scoped extraction for 1–10 profile URLs.
+- `POST /v1/link-discovery` — discover and canonicalize LinkedIn profile URLs from submitted content.
+- `POST /v1/batches` — create deterministic batch extraction workflows.
+- `GET /v1/batches/{id}` — inspect batch state and results.
+- `POST /v1/session-exports/xlsx` — export normalized results.
+
+Interactive OpenAPI documentation is available at:
+
+`https://profile-refinery-api.vercel.app/docs`
+
+### Guardrails and failure semantics
+
+Every upstream operation passes through validation, bounded concurrency, token-bucket pacing, bounded retries, response size/type checks, semantic identity validation, and a challenge-aware circuit breaker.
+
+A successful HTTP response is not automatically accepted as successful extraction.
+
+Unknown protocol structures produce typed drift errors. Optional-section failures create explicit partial responses. Missing fields remain missing. The application never fabricates profile information to satisfy the response schema.
+
+### Evaluation
+
+The implementation deliberately separates three evidence classes:
+
+1. **LIVE** — current controlled observation using an authorized session.
+2. **REAL_HAR_REPLAY** — deterministic parsing against a redacted real capture.
+3. **SYNTHETIC_UNIT** — authored test fixtures covering expected and failure behavior.
+
+Release verification:
+
+```bash
+uv run ruff check src tests config scripts
+uv run mypy src/profile_refinery_api
+uv run pytest
+uv run python scripts/security_audit.py
+uv run pip-audit
+```
+
+### Limitations
+
+LinkedIn is an undocumented and mutable upstream. Protocol contracts, operation identifiers, structured records, authentication requirements, and visibility behavior can change without notice.
+
+The implementation therefore does not claim universal extraction completeness. Pagination is supported only where captured evidence establishes its cursor and termination semantics, and optional sections may legitimately return partial results.
+
+Live extraction additionally depends on the visibility available to the authorized viewer.
+
+### Appropriate long-term fix
+
+Reverse-engineering is appropriate for demonstrating how an undocumented integration can be discovered, normalized, validated, and operationalized, but it is not the ideal permanent integration contract.
+
+The long-term solution would be a stable, officially supported LinkedIn interface exposing the required profile fields under an explicit authorization and data-use contract. If such an interface became available, Profile Refinery's normalized schema and API boundary could remain stable while the undocumented upstream transport was replaced with the supported integration.
 ## Why this system exists
 
 Rendered pages are a poor extraction contract: layout changes, virtualization, and presentation state obscure the entities a data pipeline needs. Profile Refinery instead treats upstream behavior as a protocol-research problem:
