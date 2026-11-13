@@ -55,6 +55,13 @@ _MEMBER_ID_KEYS = ("profileId", "vieweeProfileId", "memberId")
 _HEADLINE_FIELD_NAMES = ("headline", "occupation")
 _SEPARATOR_TEXTS = {"·", "•", "|"}
 _PRONOUNS_RE = re.compile(r"\((?:he|she|they)[/·](?:him|her|them)\)", re.IGNORECASE)
+# Top-card image discrimination: profile portraits are square renditions at
+# portrait scale; background banners are wide renditions at banner scale.
+_PORTRAIT_MIN_RATIO = 0.8
+_PORTRAIT_MAX_RATIO = 1.25
+_BANNER_MIN_RATIO = 2.0
+_PORTRAIT_MAX_SCALE_WIDTH = 800
+_BANNER_MIN_SCALE_WIDTH = 1000
 
 _RESERVED_LEAVES = {"button", "div", "hr", "p", "section"}
 _PROFICIENCIES = {
@@ -413,6 +420,7 @@ def parse_rsc_page_core_payload(payload: dict[str, Any], slug: str) -> dict[str,
             location = row_text[0].strip()
 
     member_id = _top_card_member_id(top_card)
+    portrait, banner = _top_card_images(top_card)
     first_name, _, last_name = name.partition(" ")
     return {
         "identity": {
@@ -425,8 +433,8 @@ def parse_rsc_page_core_payload(payload: dict[str, Any], slug: str) -> dict[str,
         "headline": _top_card_headline(top_card, name, location_row),
         "location": location,
         "about": None,
-        "profile_image": _top_card_image(top_card),
-        "background_image": None,
+        "profile_image": portrait,
+        "background_image": banner,
         "unknown_entity_types": [],
     }
 
@@ -478,9 +486,11 @@ def _texts_before(root: Any, stop: Any) -> list[str]:
     """Pre-order visible text of a resolved subtree, ending at ``stop``.
 
     Visible SDUI text lives in ``children`` arrays; model metadata on other
-    keys is not rendered content. The walk ends as soon as the semantic stop
-    node is reached, so text that renders below it (follower counts, action
-    labels) is never attributed to the headline.
+    keys is not rendered content. Flight element headers (the ``$``, tag, and
+    key slots of ``["$", "div", null, props]`` records) are markup, not text.
+    The walk ends as soon as the semantic stop node is reached, so text that
+    renders below it (follower counts, action labels) is never attributed to
+    the headline.
     """
 
     output: list[str] = []
@@ -505,7 +515,10 @@ def _texts_before(root: Any, stop: Any) -> list[str]:
                         return True
             return False
         if isinstance(value, list):
-            return any(walk(child) for child in value)
+            # A Flight element record carries its tag name as a plain string
+            # in the second slot; skip the header slots and walk the props.
+            start = 3 if value and value[0] == "$" else 0
+            return any(walk(child) for child in value[start:])
         return False
 
     walk(root)
@@ -541,24 +554,96 @@ def _top_card_member_id(top_card: Any) -> str | None:
     return None
 
 
-def _top_card_image(top_card: Any) -> dict[str, Any] | None:
-    """Largest portrait rendered by the top card, from the SDUI render shape.
+def _top_card_images(top_card: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Return (portrait, banner) from the top card's SDUI render payloads.
 
-    The page flight carries SDUI primitives; its images expose rootUrl plus
-    imageRenditions render payloads (the shape live-verified on the Activity
-    resolver). Unrecognized shapes yield None — never a guessed URL.
+    The card renders both the round profile portrait and the wide background
+    banner as images, so the widest rendition is the banner, not the portrait.
+    Selection is therefore shape-aware: a portrait is a square-rendition image
+    (renditions that expose height), or — when payloads expose widths only —
+    an image whose largest rendition stays within portrait scale (800px);
+    a banner is a measured wide-ratio image, or one that reaches banner scale
+    (1128px+). Unrecognizable shapes yield None — never a guessed URL.
     """
 
-    best: dict[str, Any] | None = None
-    best_width = 0
+    payloads: list[list[tuple[str, int, int | None]]] = []
     for node in _objects(top_card):
         render = node.get("renderPayload")
         if not isinstance(render, dict):
             continue
-        rendered = _render_payload_image(render)
-        if rendered is not None and rendered[1] > best_width:
-            best, best_width = {"url": rendered[0]}, rendered[1]
-    return best
+        root_url = render.get("rootUrl")
+        renditions = render.get("imageRenditions")
+        if not isinstance(root_url, str) or not isinstance(renditions, list):
+            continue
+        renditions_out: list[tuple[str, int, int | None]] = []
+        for rendition in renditions:
+            if not isinstance(rendition, dict) or not isinstance(rendition.get("suffixUrl"), str):
+                continue
+            width = rendition.get("width")
+            height = rendition.get("height")
+            renditions_out.append(
+                (
+                    root_url + rendition["suffixUrl"],
+                    width if isinstance(width, int) else 0,
+                    height if isinstance(height, int) else None,
+                )
+            )
+        if renditions_out:
+            payloads.append(renditions_out)
+
+    return _select_portrait(payloads), _select_banner(payloads)
+
+
+def _select_portrait(
+    payloads: list[list[tuple[str, int, int | None]]],
+) -> dict[str, Any] | None:
+    """The largest square-ish rendition, preferring measured aspect ratios."""
+
+    measured = [
+        (width, height, url)
+        for renditions in payloads
+        for url, width, height in renditions
+        if height and _PORTRAIT_MIN_RATIO <= width / height <= _PORTRAIT_MAX_RATIO
+    ]
+    if measured:
+        best = max(measured, key=lambda item: item[0])
+        return {"url": best[2]}
+    # Widths only: an image is portrait-scale when even its largest rendition
+    # stays within portrait dimensions, so a banner's small renditions (660px
+    # displays exist) cannot masquerade as the portrait.
+    by_scale = [
+        max(
+            (rendition for rendition in renditions if rendition[1] <= _PORTRAIT_MAX_SCALE_WIDTH),
+            key=lambda item: item[1],
+        )
+        for renditions in payloads
+        if renditions and max(rendition[1] for rendition in renditions) <= _PORTRAIT_MAX_SCALE_WIDTH
+    ]
+    largest = max((item for item in by_scale if item), key=lambda item: item[1], default=None)
+    return {"url": largest[0]} if largest else None
+
+
+def _select_banner(
+    payloads: list[list[tuple[str, int, int | None]]],
+) -> dict[str, Any] | None:
+    """The widest wide-ratio rendition, preferring measured aspect ratios."""
+
+    measured = [
+        (width, height, url)
+        for renditions in payloads
+        for url, width, height in renditions
+        if height and width / height >= _BANNER_MIN_RATIO
+    ]
+    if measured:
+        best = max(measured, key=lambda item: item[0])
+        return {"url": best[2]}
+    by_scale = [
+        max(renditions, key=lambda item: item[1])
+        for renditions in payloads
+        if renditions and max(rendition[1] for rendition in renditions) >= _BANNER_MIN_SCALE_WIDTH
+    ]
+    widest = max((item for item in by_scale if item), key=lambda item: item[1], default=None)
+    return {"url": widest[0]} if widest else None
 
 
 def _view_name(value: dict[str, Any]) -> str | None:

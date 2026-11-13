@@ -325,6 +325,129 @@ def test_page_core_does_not_guess_headline_without_location_row() -> None:
     assert result["headline"] is None
 
 
+def test_page_core_skips_flight_element_headers_in_text_window() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"givenName": "Captured", "familyName": "Person"},
+                    ["$", "figure", None, {"children": ["Captured Person", "Protocol Engineer"]}],
+                    _element(
+                        {
+                            "direction": "horizontal",
+                            "children": [
+                                "Greater Chennai Area",
+                                "·",
+                                {
+                                    "children": ["Contact info"],
+                                    "screenId": (
+                                        "com.linkedin.sdui.flagshipnav.profile."
+                                        "ProfileContactDetailsOverlay"
+                                    ),
+                                },
+                            ],
+                        }
+                    ),
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "captured-person")
+
+    assert result["headline"] == "Protocol Engineer"
+
+
+def test_page_core_portrait_is_square_image_not_wide_banner() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"givenName": "Captured", "familyName": "Person"},
+                    _element(
+                        {
+                            "renderPayload": {
+                                "rootUrl": "https://media.licdn.com/dms/image/v2/banner-/",
+                                "imageRenditions": [
+                                    {"width": 660, "height": 220, "suffixUrl": "banner-small"},
+                                    {"width": 1584, "height": 396, "suffixUrl": "banner-large"},
+                                ],
+                            }
+                        }
+                    ),
+                    _element(
+                        {
+                            "renderPayload": {
+                                "rootUrl": "https://media.licdn.com/dms/image/v2/photo-/",
+                                "imageRenditions": [
+                                    {"width": 100, "height": 100, "suffixUrl": "photo-100"},
+                                    {"width": 800, "height": 800, "suffixUrl": "photo-800"},
+                                ],
+                            }
+                        }
+                    ),
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "captured-person")
+
+    assert result["profile_image"] == {"url": "https://media.licdn.com/dms/image/v2/photo-/photo-800"}
+    assert result["background_image"] == {
+        "url": "https://media.licdn.com/dms/image/v2/banner-/banner-large"
+    }
+
+
+def test_page_core_portrait_uses_scale_bound_when_heights_missing() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"givenName": "Captured", "familyName": "Person"},
+                    _element(
+                        {
+                            "renderPayload": {
+                                "rootUrl": "https://media.licdn.com/dms/image/v2/banner-/",
+                                "imageRenditions": [
+                                    {"width": 660, "suffixUrl": "banner-small"},
+                                    {"width": 1584, "suffixUrl": "banner-large"},
+                                ],
+                            }
+                        }
+                    ),
+                    _element(
+                        {
+                            "renderPayload": {
+                                "rootUrl": "https://media.licdn.com/dms/image/v2/photo-/",
+                                "imageRenditions": [
+                                    {"width": 100, "suffixUrl": "photo-100"},
+                                    {"width": 400, "suffixUrl": "photo-400"},
+                                    {"width": 800, "suffixUrl": "photo-800"},
+                                ],
+                            }
+                        }
+                    ),
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "captured-person")
+
+    # The banner's 660px display rendition must not win the portrait slot.
+    assert result["profile_image"] == {"url": "https://media.licdn.com/dms/image/v2/photo-/photo-800"}
+    assert result["background_image"] == {
+        "url": "https://media.licdn.com/dms/image/v2/banner-/banner-large"
+    }
+
+
 def test_flight_document_resolves_lazy_model_references() -> None:
     text = "\n".join(
         [
