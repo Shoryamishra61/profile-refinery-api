@@ -5,9 +5,10 @@ Profile Refinery is a browserless LinkedIn profile-normalization system built ar
 **Public application:** <https://profile-refinery-api.vercel.app>
 
 **OpenAPI:** <https://profile-refinery-api.vercel.app/docs>
-## Razorpay Forward-Deployed Engineer Assignment
 
-This repository is submitted for **Option 1 — Reverse-engineer an API**.
+## Overview
+
+Profile Refinery treats LinkedIn's undocumented web protocols as an integration-surface research problem: observe the structured responses an authorized session already receives, establish which member owns every returned entity, and expose the result as a bounded, documented HTTP API.
 
 ### Problem
 
@@ -37,7 +38,7 @@ It only processes information returned to the authorized viewer through ordinary
 
 ### API surface
 
-The primary assignment endpoints are:
+The primary API endpoints are:
 
 - `GET /v1/profiles?url=...` — normalize one profile using the configured authorized session.
 - `POST /v1/session-extractions` — perform request-scoped extraction for 1–10 profile URLs.
@@ -58,7 +59,7 @@ A successful HTTP response is not automatically accepted as successful extractio
 
 Unknown protocol structures produce typed drift errors. Optional-section failures create explicit partial responses. Missing fields remain missing. The application never fabricates profile information to satisfy the response schema.
 
-### Evaluation
+### Evidence classes and verification
 
 The implementation deliberately separates three evidence classes:
 
@@ -102,9 +103,9 @@ Rendered pages are a poor extraction contract: layout changes, virtualization, a
 
 The current protocol uses the `profileCardsActivity` SDUI component for core identity, then identity-scoped profile-card components for Experience, Education, Skills, Certifications, and Languages. An authenticated profile-page operation is available as a core fallback and bounded location-enrichment path.
 
-## Requirement coverage
+## Capability summary
 
-| Requirement | Implementation |
+| Capability | Implementation |
 |---|---|
 | Public HTTPS API | Deployed at `https://profile-refinery-api.vercel.app` |
 | Accept a LinkedIn profile URL | `GET /v1/profiles?url=…` and request-scoped `POST /v1/session-extractions` |
