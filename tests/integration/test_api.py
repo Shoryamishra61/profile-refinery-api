@@ -388,6 +388,67 @@ async def test_missing_rsc_location_is_enriched_from_profile_page_flight(
 
 
 @pytest.mark.asyncio
+async def test_page_fallback_resolves_member_identity_and_fetches_sections(
+    client: httpx.AsyncClient, stub_transport: object
+) -> None:
+    """Regression: a drifted primary must not strand the fallback name-only.
+
+    When profile_view drifts and profile_page answers, the page top card's
+    own headline and member-identity references must feed the section plan —
+    otherwise every section fails with member_identity_unresolved and the
+    profile degrades to name + location.
+    """
+
+    def record(value: object) -> str:
+        return f"0:{json.dumps(value, separators=(',', ':'))}"
+
+    page_flight = record(
+        {
+            "viewTrackingSpecs": {"viewName": "profile-top-card"},
+            "componentKey": "urn:li:fsd_profile:ACoCAPTURED000001",
+            "children": [
+                {"givenName": "Captured", "familyName": "Person"},
+                {"children": ["Captured Person", "Protocol Engineer"]},
+                {
+                    "direction": "horizontal",
+                    "children": [
+                        "Greater Chennai Area",
+                        "·",
+                        {
+                            "children": ["Contact info"],
+                            "screenId": (
+                                "com.linkedin.sdui.flagshipnav.profile."
+                                "ProfileContactDetailsOverlay"
+                            ),
+                        },
+                    ],
+                },
+            ],
+        }
+    )
+    stub_transport.set("profile_view", [UpstreamOperationDrift("profile_view", "drifted")])
+    stub_transport.set("profile_page", [{"page_flight": page_flight}])
+    # Section contracts stay on the default fixture graph, proving they are
+    # actually requested once the page resolves the member identity.
+
+    response = await client.get(
+        "/v1/profiles",
+        params={"url": "https://www.linkedin.com/in/captured-person/"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["partial"] is False
+    assert body["profile"]["headline"]["value"] == "Protocol Engineer"
+    assert body["profile"]["identity"]["value"]["member_urn"] == (
+        "urn:li:fsd_profile:ACoCAPTURED000001"
+    )
+    assert body["profile"]["experience"]["status"] == "present"
+    assert "profile_experience" in body["meta"]["operations_succeeded"]
+
+
+@pytest.mark.asyncio
 async def test_profile_view_challenge_is_terminal_without_page_fallback(
     client: httpx.AsyncClient, stub_transport: object
 ) -> None:

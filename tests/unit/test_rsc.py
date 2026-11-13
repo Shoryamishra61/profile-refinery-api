@@ -179,6 +179,152 @@ def test_profile_page_core_does_not_invent_hidden_location() -> None:
     assert result["location"] is None
 
 
+def test_page_core_resolves_headline_member_and_portrait_from_top_card() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "componentKey": "urn:li:fsd_profile:ACoTARGET123456",
+                "children": [
+                    {"givenName": "Captured", "familyName": "Person"},
+                    {"children": ["Captured Person", "Protocol Engineer", "(he/him)"]},
+                    _element(
+                        {
+                            "direction": "horizontal",
+                            "children": [
+                                "Greater Chennai Area",
+                                "·",
+                                {
+                                    "children": ["Contact info"],
+                                    "screenId": (
+                                        "com.linkedin.sdui.flagshipnav.profile."
+                                        "ProfileContactDetailsOverlay"
+                                    ),
+                                },
+                            ],
+                        }
+                    ),
+                    _element({"children": ["500+ connections", "Follow", "Message"]}),
+                    _element(
+                        {
+                            "renderPayload": {
+                                "rootUrl": "https://media.licdn.com/dms/image/v2/asset1-/",
+                                "imageRenditions": [
+                                    {"width": 100, "suffixUrl": "small"},
+                                    {"width": 800, "suffixUrl": "large"},
+                                ],
+                            }
+                        }
+                    ),
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "captured-person")
+
+    assert result["name"] == "Captured Person"
+    assert result["headline"] == "Protocol Engineer"
+    assert result["identity"]["member_urn"] == "urn:li:fsd_profile:ACoTARGET123456"
+    assert result["profile_image"] == {"url": "https://media.licdn.com/dms/image/v2/asset1-/large"}
+
+
+def test_page_core_prefers_structured_headline_field() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"givenName": "Captured", "familyName": "Person", "headline": "Data Lead"},
+                    _element(
+                        {
+                            "direction": "horizontal",
+                            "children": [
+                                "Greater Chennai Area",
+                                "·",
+                                {
+                                    "children": ["Contact info"],
+                                    "screenId": (
+                                        "com.linkedin.sdui.flagshipnav.profile."
+                                        "ProfileContactDetailsOverlay"
+                                    ),
+                                },
+                            ],
+                        }
+                    ),
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "captured-person")
+
+    assert result["headline"] == "Data Lead"
+
+
+def test_page_core_accepts_bare_member_id_from_identity_key() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"givenName": "Captured", "familyName": "Person"},
+                    {
+                        "profileId": "ACoTARGET123456",
+                        "screenId": "com.linkedin.sdui.flagshipnav.profile.ProfileContactDetailsOverlay",
+                    },
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "captured-person")
+
+    assert result["identity"]["member_urn"] == "urn:li:fsd_profile:ACoTARGET123456"
+
+
+def test_page_core_drops_ambiguous_member_identity() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"givenName": "Captured", "familyName": "Person"},
+                    {"componentKey": "urn:li:fsd_profile:ACoTARGET123456"},
+                    {"componentKey": "urn:li:fsd_profile:ACoOTHER1234567"},
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "captured-person")
+
+    assert result["identity"]["member_urn"] is None
+
+
+def test_page_core_does_not_guess_headline_without_location_row() -> None:
+    text = _record(
+        "0",
+        _element(
+            {
+                "viewTrackingSpecs": {"viewName": "profile-top-card"},
+                "children": [
+                    {"givenName": "Private", "familyName": "Member"},
+                    {"children": ["Private Member", "Follow", "Message"]},
+                ],
+            }
+        ),
+    )
+
+    result = parse_rsc_page_core_payload({"page_flight": text}, "private-member")
+
+    assert result["headline"] is None
+
+
 def test_flight_document_resolves_lazy_model_references() -> None:
     text = "\n".join(
         [

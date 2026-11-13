@@ -44,6 +44,17 @@ from .session_extraction import (
 
 WEB_ROOT = Path(__file__).with_name("web")
 
+# Inline wordmark icon matching the masthead mark. Browsers request
+# /favicon.ico unprompted; without this route every page load logs a 404.
+_FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+    '<rect width="64" height="64" rx="10" fill="#141412"/>'
+    '<text x="32" y="46" font-family="Georgia, \'Times New Roman\', serif" '
+    'font-style="italic" font-weight="700" font-size="42" fill="#f3efe3" '
+    'text-anchor="middle">P</text>'
+    "</svg>"
+)
+
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
@@ -134,6 +145,14 @@ def build_router(runtime: Runtime) -> APIRouter:
             WEB_ROOT.joinpath("docs.js").read_text(encoding="utf-8"),
             media_type="text/javascript",
             headers={"Cache-Control": "public, max-age=300"},
+        )
+
+    @router.get("/favicon.ico", include_in_schema=False)
+    async def favicon() -> Response:
+        return Response(
+            _FAVICON_SVG,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=86400"},
         )
 
     @router.get("/v1/profile-media", include_in_schema=False)

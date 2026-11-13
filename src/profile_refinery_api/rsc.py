@@ -44,6 +44,17 @@ _EXPIRES_RE = re.compile(
 )
 _SKILL_ID_RE = re.compile(r"com\.linkedin\.sdui\.profile\.skill\([^,]+,\s*([^)]+)\)")
 _LANGUAGE_ID_RE = re.compile(r"com\.linkedin\.sdui\.profile\.language\([^,]+,\s*([^)]+)\)")
+# Member identity references inside a resolved top card. Only current dash
+# member ids (the ACo… shape carried by fsd_profile URNs) are accepted; a
+# section request built from any other shape would target the wrong entity.
+_MEMBER_URN_RE = re.compile(
+    r"urn:li:(?:fsd_profile|fs_miniProfile|member):(ACo[A-Za-z0-9_-]{10,})"
+)
+_BARE_MEMBER_ID_RE = re.compile(r"ACo[A-Za-z0-9_-]{10,}")
+_MEMBER_ID_KEYS = ("profileId", "vieweeProfileId", "memberId")
+_HEADLINE_FIELD_NAMES = ("headline", "occupation")
+_SEPARATOR_TEXTS = {"·", "•", "|"}
+_PRONOUNS_RE = re.compile(r"\((?:he|she|they)[/·](?:him|her|them)\)", re.IGNORECASE)
 
 _RESERVED_LEAVES = {"button", "div", "hr", "p", "section"}
 _PROFICIENCIES = {
@@ -339,9 +350,10 @@ def parse_rsc_page_core_payload(payload: dict[str, Any], slug: str) -> dict[str,
     Modern profile pages no longer necessarily embed a Voyager ``included``
     graph. They do embed the server-owned React Flight model used to hydrate
     the page. The profile is selected by the semantic ``profile-top-card``
-    view, and location is selected from the smallest horizontal row that owns
-    the contact-details navigation action. No CSS class or DOM position is
-    used as an identity signal.
+    view; headline, member identity, and portrait come from that card's own
+    semantic content, and location is selected from the smallest horizontal
+    row that owns the contact-details navigation action. No CSS class or DOM
+    position is used as an identity signal.
     """
 
     text = payload.get("page_flight")
@@ -391,26 +403,162 @@ def parse_rsc_page_core_payload(payload: dict[str, Any], slug: str) -> dict[str,
         )
     ]
     location = None
+    location_row: Any | None = None
     if location_rows:
-        row_text = _visible_text(min(location_rows, key=_serialized_size))
+        location_row = min(location_rows, key=_serialized_size)
+        row_text = _visible_text(location_row)
         # Captured rows contain location, a separator, and the localized
         # contact-details label. A hidden location produces only the action.
         if len(row_text) >= 3 and row_text[0].strip(" ·•|"):
             location = row_text[0].strip()
 
+    member_id = _top_card_member_id(top_card)
     first_name, _, last_name = name.partition(" ")
     return {
-        "identity": {"member_urn": None, "public_identifier": slug},
+        "identity": {
+            "member_urn": f"urn:li:fsd_profile:{member_id}" if member_id else None,
+            "public_identifier": slug,
+        },
         "first_name": first_name or None,
         "last_name": last_name or None,
         "name": name,
-        "headline": None,
+        "headline": _top_card_headline(top_card, name, location_row),
         "location": location,
         "about": None,
-        "profile_image": None,
+        "profile_image": _top_card_image(top_card),
         "background_image": None,
         "unknown_entity_types": [],
     }
+
+
+def _field_string(value: Any) -> str | None:
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, dict):
+        text = value.get("text")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+        localized = value.get("localized")
+        if isinstance(localized, dict):
+            for item in localized.values():
+                if isinstance(item, str) and item.strip():
+                    return item.strip()
+    return None
+
+
+def _top_card_headline(top_card: Any, name: str, location_row: Any | None) -> str | None:
+    """Resolve the target headline from the top card without inventing content.
+
+    Preferred: a server-provided headline/occupation field on a top-card node.
+    Fallback: the first visible text rendered between the name and the
+    contact-details row (render order: name → headline → location), skipping
+    separators, pronoun badges, and name strings that carry a trailing
+    connection-degree suffix. Without that bounded window — no location row —
+    no text is guessed.
+    """
+
+    for node in _objects(top_card):
+        for key in _HEADLINE_FIELD_NAMES:
+            text = _field_string(node.get(key))
+            if text:
+                return text
+    if location_row is None:
+        return None
+    for text in _texts_before(top_card, location_row):
+        cleaned = text.strip()
+        if not cleaned or cleaned == name or cleaned.startswith(f"{name} "):
+            continue
+        if cleaned in _SEPARATOR_TEXTS or _PRONOUNS_RE.fullmatch(cleaned):
+            continue
+        return cleaned
+    return None
+
+
+def _texts_before(root: Any, stop: Any) -> list[str]:
+    """Pre-order visible text of a resolved subtree, ending at ``stop``.
+
+    Visible SDUI text lives in ``children`` arrays; model metadata on other
+    keys is not rendered content. The walk ends as soon as the semantic stop
+    node is reached, so text that renders below it (follower counts, action
+    labels) is never attributed to the headline.
+    """
+
+    output: list[str] = []
+
+    def walk(value: Any) -> bool:
+        if value is stop:
+            return True
+        if isinstance(value, dict):
+            children = value.get("children")
+            if isinstance(children, list):
+                for child in children:
+                    if isinstance(child, str):
+                        text = child.strip()
+                        if (
+                            text
+                            and not text.startswith("$")
+                            and text not in _RESERVED_LEAVES
+                            and not text.startswith("com.linkedin.sdui.profile.card.ref")
+                        ):
+                            output.append(text)
+                    elif walk(child):
+                        return True
+            return False
+        if isinstance(value, list):
+            return any(walk(child) for child in value)
+        return False
+
+    walk(root)
+    return output
+
+
+def _top_card_member_id(top_card: Any) -> str | None:
+    """Resolve the target member id from the top card's own identity references.
+
+    fsd_profile/miniProfile/member URNs found anywhere in the card are
+    preferred; bare ids on explicit identity keys are the fallback. Distinct
+    candidate ids mean ambiguity — the id is dropped rather than guessed, so
+    section retrieval stays unavailable instead of targeting a wrong member.
+    """
+
+    urn_ids: set[str] = set()
+    keyed_ids: set[str] = set()
+    for value in _strings(top_card):
+        match = _MEMBER_URN_RE.search(value)
+        if match:
+            urn_ids.add(match.group(1))
+    for node in _objects(top_card):
+        for key in _MEMBER_ID_KEYS:
+            candidate = node.get(key)
+            if isinstance(candidate, str):
+                match = _BARE_MEMBER_ID_RE.fullmatch(candidate.strip())
+                if match:
+                    keyed_ids.add(match.group(0))
+    if len(urn_ids) == 1:
+        return next(iter(urn_ids))
+    if not urn_ids and len(keyed_ids) == 1:
+        return next(iter(keyed_ids))
+    return None
+
+
+def _top_card_image(top_card: Any) -> dict[str, Any] | None:
+    """Largest portrait rendered by the top card, from the SDUI render shape.
+
+    The page flight carries SDUI primitives; its images expose rootUrl plus
+    imageRenditions render payloads (the shape live-verified on the Activity
+    resolver). Unrecognized shapes yield None — never a guessed URL.
+    """
+
+    best: dict[str, Any] | None = None
+    best_width = 0
+    for node in _objects(top_card):
+        render = node.get("renderPayload")
+        if not isinstance(render, dict):
+            continue
+        rendered = _render_payload_image(render)
+        if rendered is not None and rendered[1] > best_width:
+            best, best_width = {"url": rendered[0]}, rendered[1]
+    return best
 
 
 def _view_name(value: dict[str, Any]) -> str | None:
@@ -489,6 +637,13 @@ def _state_image(value: Any) -> dict[str, Any] | None:
     render = source.get("renderPayload") if isinstance(source, dict) else None
     if not isinstance(render, dict):
         return None
+    rendered = _render_payload_image(render)
+    return {"url": rendered[0]} if rendered else None
+
+
+def _render_payload_image(render: dict[str, Any]) -> tuple[str, int] | None:
+    """Return (url, width) for the widest rendition of an SDUI render payload."""
+
     root_url = render.get("rootUrl")
     renditions = render.get("imageRenditions")
     if not isinstance(root_url, str) or not isinstance(renditions, list):
@@ -501,7 +656,7 @@ def _state_image(value: Any) -> dict[str, Any] | None:
     if not candidates:
         return None
     best = max(candidates, key=_rendition_width)
-    return {"url": root_url + best["suffixUrl"]}
+    return root_url + best["suffixUrl"], _rendition_width(best)
 
 
 def _rendition_width(rendition: dict[str, Any]) -> int:
